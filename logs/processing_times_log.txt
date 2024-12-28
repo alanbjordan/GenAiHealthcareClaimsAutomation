@@ -1,0 +1,11 @@
+Processing time for extracting file type (pdf): 34.27 seconds
+Processing time for extracting file type (pdf): 21.25 seconds
+Optimization: Reduced processing time for document extraction from 34 seconds to 21 seconds (~38% improvement).Processing time for extracting file type (pdf): 16.41 seconds
+Processing time for extracting file type (pdf): 19.59 seconds
+Processing time for extracting file type (pdf): 18.22 seconds
+Processing time for extracting file type (pdf): 16.68 seconds
+Processing time for extracting file type (pdf): 24.38 seconds
+Processing time for extracting file type (pdf): 72.23 seconds
+Processing time for extracting file type (pdf): 62.32 seconds
+Processing time for extracting file type (pdf): 950.81 seconds
+Processing time for extracting file type (pdf): 69.12 seconds
