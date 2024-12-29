@@ -142,3 +142,16 @@ class Waitlist(db.Model):
     region = db.Column(db.String(50))
     city = db.Column(db.String(50))
     zip_code = db.Column(db.String(20))
+
+class NexusTags(db.Model):
+    __tablename__ = 'nexus_tags'
+
+    nexus_tags_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('tags.tag_id', ondelete='CASCADE'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    discovered_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    tag = db.relationship('Tag', backref='nexus_tags', lazy='select')
+    user = db.relationship('Users', backref='nexus_tags', lazy='select')
