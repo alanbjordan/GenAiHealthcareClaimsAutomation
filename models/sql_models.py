@@ -142,3 +142,17 @@ class Waitlist(db.Model):
     region = db.Column(db.String(50))
     city = db.Column(db.String(50))
     zip_code = db.Column(db.String(20))
+
+class NexusTags(db.Model):
+    __tablename__ = 'nexus_tags'
+
+    nexus_tags_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('tags.tag_id', ondelete='CASCADE'), nullable=False)
+
+    # When the system recognizes this tag has both T & F conditions
+    discovered_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    # When the system discovers that this tag no longer has T & F conditions (if ever)
+    revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Optional relationship to Tag
+    tag = db.relationship('Tag', backref='nexus_tags', lazy='select')
