@@ -176,7 +176,7 @@ def upload():
                                         visit=visit,
                                         page_number=page_number,
                                         service_periods=service_periods,
-                                        user_id=user.user_id,
+                                        user_id=user.user_id,  # Pass user's ID
                                         file_id=file_id
                                     )
                                     futures.append(future)
@@ -222,11 +222,11 @@ def upload():
         logging.info("All files have been processed and committed to the database.")
         print("All files have been processed and committed to the database.")
 
-        # Now discover any newly qualified nexus tags
-        discover_nexus_tags(session)
-        
-        # Optional: Revoke nexus tags that no longer qualify (usually done on deletions)
-        revoke_nexus_tags_if_invalid(session)
+        # Now discover any newly qualified nexus tags for this user
+        discover_nexus_tags(session, user.user_id)
+
+        # Optional: Revoke nexus tags that no longer qualify for this user
+        revoke_nexus_tags_if_invalid(session, user.user_id)
         
         # Final commit after nexus updates
         session.commit()
@@ -243,6 +243,7 @@ def upload():
         logging.exception(f"Upload failed: {str(e)}")
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
+
 
     
 def extract_structured_data_from_file(file_path, file_type):
