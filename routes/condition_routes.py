@@ -7,6 +7,7 @@ import logging
 import time
 from sqlalchemy.orm import defer
 from database.session import ScopedSession
+from models.sql_models import *
 
 condition_bp = Blueprint('condition_bp', __name__)
 session = ScopedSession()
@@ -140,5 +141,65 @@ def get_conditions():
     print(f"Prepared response data with {len(response_data)} tags and {total_conditions} conditions in {response_data_elapsed_time:.4f} seconds.")
 
     print(f"Total time for request: {time.time() - start_time:.4f} seconds.")
+
+    return jsonify(response_data), 200
+
+
+@condition_bp.route("/feed_updates", methods=["GET"])
+def feed_updates():
+    """
+    Returns a list of active nexus tags along with 
+    all associated Conditions (including their fields).
+    This can be used in a front-end "Updates" or "Feed" section 
+    to highlight newly discovered nexus tags and the relevant 
+    in-service/current conditions that triggered them.
+    """
+
+    # 1. Query all active nexus rows (revoked_at is still NULL)
+    active_nexus_tags = (
+        session.query(NexusTags)
+        .filter(NexusTags.revoked_at.is_(None))
+        .all()
+    )
+
+    response_data = []
+
+    # 2. Build the response
+    for nexus in active_nexus_tags:
+        # "tag" is the Tag object (relationship from NexusTags to Tag)
+        t = nexus.tag
+
+        # 3. Find all Conditions associated with this tag
+        #    (Use your many-to-many table condition_tags)
+        conditions = (
+            session.query(Conditions)
+            .join(condition_tags, condition_tags.c.condition_id == Conditions.condition_id)
+            .filter(condition_tags.c.tag_id == t.tag_id)
+            .all()
+        )
+
+        # 4. Assemble the list of condition dictionaries
+        condition_list = []
+        for c in conditions:
+            condition_list.append({
+                "condition_id": c.condition_id,
+                "condition_name": c.condition_name,
+                "date_of_visit": c.date_of_visit.isoformat() if c.date_of_visit else None,
+                "medical_professionals": c.medical_professionals,
+                "treatments": c.treatments,
+                "findings": c.findings,
+                "comments": c.comments,
+                "in_service": c.in_service,
+                # Add more fields if needed
+            })
+
+        # 5. Build the nexus-level entry
+        response_data.append({
+            "nexus_tags_id": nexus.nexus_tags_id,
+            "tag_id": t.tag_id,
+            "disability_name": t.disability_name,  # e.g., "Knee Condition"
+            "discovered_at": nexus.discovered_at.isoformat() if nexus.discovered_at else None,
+            "conditions": condition_list,
+        })
 
     return jsonify(response_data), 200
