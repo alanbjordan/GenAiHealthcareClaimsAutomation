@@ -333,14 +333,23 @@ def delete_document(file_id):
         session.delete(file_record)
         session.commit()
 
+        # Now that the file (and possibly associated conditions) are removed,
+        # re-check if any nexus tags no longer meet T+F criteria
+        revoke_nexus_tags_if_invalid(session)
+        session.commit()
+
         return jsonify({"message": "File deleted successfully"}), 200
+
     except Exception as e:
+        session.rollback()
         logging.error(f"Error deleting file with id {file_id}: {e}")
         return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
-    
+
+
 def extract_blob_name(blob_url):
-# Example URL: "https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>"
+    # Example URL: "https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>"
     return "/".join(blob_url.split("/")[4:])  # Gets the blob name from the full URL
+
 
 @document_bp.route('/documents/rename/<int:file_id>', methods=['PUT'])
 def rename_document(file_id):
