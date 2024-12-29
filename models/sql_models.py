@@ -148,11 +148,10 @@ class NexusTags(db.Model):
 
     nexus_tags_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     tag_id = db.Column(db.Integer, db.ForeignKey('tags.tag_id', ondelete='CASCADE'), nullable=False)
-
-    # When the system recognizes this tag has both T & F conditions
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
     discovered_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
-    # When the system discovers that this tag no longer has T & F conditions (if ever)
     revoked_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    # Optional relationship to Tag
+    # Relationships
     tag = db.relationship('Tag', backref='nexus_tags', lazy='select')
+    user = db.relationship('Users', backref='nexus_tags', lazy='select')

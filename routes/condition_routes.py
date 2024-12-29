@@ -154,7 +154,16 @@ def feed_updates():
     to highlight newly discovered nexus tags and the relevant 
     in-service/current conditions that triggered them.
     """
-
+    if request.method == 'OPTIONS':
+        print("Received CORS preflight request.")
+        response = jsonify({"message": "CORS preflight successful"})
+        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        print("CORS preflight response sent.")
+        return response, 200
+    
     # 1. Query all active nexus rows (revoked_at is still NULL)
     active_nexus_tags = (
         session.query(NexusTags)
