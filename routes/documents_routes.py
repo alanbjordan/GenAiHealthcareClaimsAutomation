@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from helpers.diagnosis_processor import process_diagnosis
 from helpers.diagnosis_list import process_diagnosis_list
 from database.session import ScopedSession
+from helpers.sql_helpers import *
 
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
@@ -67,7 +68,7 @@ def upload():
         if not service_periods:
             logging.warning(f'No service periods found for user {user_uuid}')
             print(f'No service periods found for user {user_uuid}')
-            # It's not mandatory to have service periods
+            # Not mandatory to have service periods
 
         uploaded_urls = []
 
@@ -77,7 +78,7 @@ def upload():
                 print("No selected file in the upload")
                 return jsonify({"error": "No selected file"}), 400
 
-            # Determine file type
+            # Determine file type based on extension
             file_extension = os.path.splitext(uploaded_file.filename)[1].lower()
             file_type_mapping = {
                 '.pdf': 'pdf',
@@ -92,13 +93,13 @@ def upload():
             logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
             print(f"Determined file type '{file_type}' for extension '{file_extension}'")
 
-            # Save to temp file
+            # Save to a temp file
             temp_file_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded_file.filename))
             uploaded_file.save(temp_file_path)
             logging.info(f"Saved uploaded file to temporary path: {temp_file_path}")
             print(f"Saved uploaded file to temporary path: {temp_file_path}")
 
-            # Extract details if needed
+            # Extract details from the file
             details = read_and_extract_document(temp_file_path, file_type)
             if not details:
                 logging.error(f"Failed to extract details from file: {uploaded_file.filename}")
@@ -111,6 +112,7 @@ def upload():
                 })
                 continue
 
+            # Attempt to parse extracted data as JSON
             try:
                 details = json.loads(details)
             except json.JSONDecodeError as e:
@@ -124,13 +126,17 @@ def upload():
                 })
                 continue
 
+            # Determine category (your logic may differ)
             category = 'Unclassified'
             blob_name = f"{user_uuid}/{category}/{uploaded_file.filename}"
+            
+            # Upload file to Azure
             blob_url = upload_file_to_azure(temp_file_path, blob_name)
             logging.info(f"Uploaded file to Azure Blob Storage: {blob_url}")
             print(f"Uploaded file to Azure Blob Storage: {blob_url}")
 
             if blob_url:
+                # Create a File record
                 new_file = File(
                     user_id=user.user_id,
                     file_name=uploaded_file.filename,
@@ -141,30 +147,26 @@ def upload():
                     file_size=os.path.getsize(temp_file_path),
                     file_category=category,
                 )
-
                 session.add(new_file)
-                session.flush()
+                session.flush()  # Get new_file.file_id
                 file_id = new_file.file_id
                 session.commit()
+                
                 logging.info(f"Inserted new file record with file_id={file_id}")
                 print(f"Inserted new file record with file_id={file_id}")
 
-
+                # Process pages & visits concurrently
                 try:
                     max_workers = 10
                     with ThreadPoolExecutor(max_workers=max_workers) as executor:
                         futures = []
-                        
-                        # Iterate over each page in details
                         for page in details:
                             page_number = page.get('page')
                             logging.info(f"Processing page {page_number}")
                             print(f"Processing page {page_number}")
 
                             if page.get('category') == 'Clinical Records':
-                                patient_name = page.get('details', {}).get('patient_name')
                                 visits = page.get('details', {}).get('visits', [])
-
                                 logging.info(f"Found {len(visits)} visits on page {page_number}")
                                 print(f"Found {len(visits)} visits on page {page_number}")
 
@@ -198,7 +200,7 @@ def upload():
                 })
                 logging.info(f"File '{uploaded_file.filename}' processed and uploaded successfully.")
                 
-                # Clean up
+                # Clean up temp file
                 try:
                     os.remove(temp_file_path)
                     logging.info(f"Temporary file {temp_file_path} removed successfully.")
@@ -215,13 +217,25 @@ def upload():
                     "error": "Failed to upload to Azure"
                 })
 
+        # Commit everything so newly inserted Conditions are in the DB
         session.commit()
         logging.info("All files have been processed and committed to the database.")
         print("All files have been processed and committed to the database.")
+
+        # Now discover any newly qualified nexus tags
+        discover_nexus_tags(session)
+        
+        # Optional: Revoke nexus tags that no longer qualify (usually done on deletions)
+        revoke_nexus_tags_if_invalid(session)
+        
+        # Final commit after nexus updates
+        session.commit()
+
         process_end_time = time.time()
         elapsed_time = process_end_time - process_start_time
         logger.info(f"Total time to read and extract document: {elapsed_time:.2f} seconds.")
         print(f">>>>>>>>>>>>>>>>>>>>PROCESSING TIME: {elapsed_time}<<<<<<<<<<<<<<<<<<<<<<")
+
         return jsonify({"message": "File(s) processed", "files": uploaded_urls}), 201
 
     except Exception as e:
