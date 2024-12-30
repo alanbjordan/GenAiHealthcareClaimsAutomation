@@ -53,18 +53,10 @@ def discover_nexus_tags(session, user_id):
 
 
 def revoke_nexus_tags_if_invalid(session, user_id):
-    """
-    For a given user:
-    1. Find any nexus_tags that are active (revoked_at is NULL),
-       but the user no longer has both T & F conditions for their associated tag.
-    2. Revoke them by setting revoked_at.
-    """
-
-    # Subquery: which tags are still valid for this user?
     still_valid_subq = (
         session.query(condition_tags.c.tag_id)
         .join(Conditions, condition_tags.c.condition_id == Conditions.condition_id)
-        .filter(Conditions.user_id == user_id)  # Only conditions for this user
+        .filter(Conditions.user_id == user_id)  # only for this user
         .group_by(condition_tags.c.tag_id)
         .having(
             func.count(case((Conditions.in_service == True, 1), else_=None)) > 0
@@ -75,11 +67,10 @@ def revoke_nexus_tags_if_invalid(session, user_id):
         .subquery()
     )
 
-    # 1) Grab all active nexus_tags for this user whose tag_id is not in the "still valid" subquery
     to_revoke = (
         session.query(NexusTags)
+        .filter(NexusTags.user_id == user_id)         # only tags for this user
         .filter(NexusTags.revoked_at.is_(None))
-        .filter(NexusTags.user_id == user_id)
         .filter(~NexusTags.tag_id.in_(still_valid_subq))
         .all()
     )
@@ -89,4 +80,3 @@ def revoke_nexus_tags_if_invalid(session, user_id):
         nexus_row.revoked_at = now_time
 
     session.commit()
-

@@ -307,7 +307,6 @@ def get_documents():
 @document_bp.route('/documents/delete/<int:file_id>', methods=['DELETE', 'OPTIONS'])
 def delete_document(file_id):
     if request.method == 'OPTIONS':
-        # Handle the preflight request
         response = jsonify({"message": "CORS preflight handled"})
         response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
@@ -315,13 +314,27 @@ def delete_document(file_id):
         response.headers["Access-Control-Allow-Credentials"] = "true"
         return response, 200
 
-    # Handle DELETE request
+    # 1) Grab the userUUID from the query param (e.g. ?userUUID=xxx)
+    user_uuid = request.args.get('userUUID', None)
+    if not user_uuid:
+        return jsonify({'error': 'Missing user UUID'}), 400
+
+    # 2) Look up the user by UUID
+    user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
     try:
+        # 3) Check if the file exists
         file_record = session.query(File).get(file_id)
         if not file_record:
             return jsonify({"error": "File not found"}), 404
 
-        # Delete the blob from Azure
+        # 4) Confirm that this file belongs to the same user
+        if file_record.user_id != user.user_id:
+            return jsonify({"error": "You do not own this file"}), 403
+
+        # 5) Delete the blob from Azure
         blob_name = '/'.join(file_record.file_url.split('/')[-3:])
         container_client = blob_service_client.get_container_client(container_name)
         try:
@@ -330,13 +343,12 @@ def delete_document(file_id):
             logging.error(f"Failed to delete blob '{blob_name}' from Azure: {e}")
             return jsonify({"error": f"Failed to delete file from Azure: {e}"}), 500
 
-        # Remove the record from the database
+        # 6) Remove the file record from the database
         session.delete(file_record)
         session.commit()
 
-        # Now that the file (and possibly associated conditions) are removed,
-        # re-check if any nexus tags no longer meet T+F criteria
-        revoke_nexus_tags_if_invalid(session)
+        # 7) Re-check user’s nexus tags
+        revoke_nexus_tags_if_invalid(session, user.user_id)  # pass user.user_id
         session.commit()
 
         return jsonify({"message": "File deleted successfully"}), 200
