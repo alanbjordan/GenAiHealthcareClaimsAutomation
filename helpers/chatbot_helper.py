@@ -22,6 +22,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"  # or whichever embedding model you p
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
+assistant_id = "asst_wLK4ntGKm10q612YMTRtJqjG"
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
@@ -260,85 +261,6 @@ def search_m21_documents(query: str, top_k: int = 3) -> str:
 
     return references_str.strip()
 
-
-###############################################################################
-# 6. CREATE A SINGLE, PERSISTENT ASSISTANT
-###############################################################################
-# NOTE: We add a gentle reminder to avoid repetitive greetings:
-assistant_instructions = (
-    "You are a virtual assistant that helps veterans understand disability claims with the VA. "
-    "You should be able to answer questions about the process, eligibility, supporting evidence, "
-    "and required documentation. Provide a helpful response to the user, and include references "
-    "from the 38 CFR or other official sources when relevant.\n\n"
-    "You have two tools you can call whenever you need official references:\n"
-    "1) search_cfr_documents  (for 38 CFR references)\n"
-    "2) search_m21_documents  (for M21-1 references)\n\n"
-    "If you already know the answer from memory, you can answer directly. If you need references, "
-    "call the appropriate tool.\n\n"
-    "Avoid repeating the same greeting each time. If the conversation has started, simply answer."
-)
-
-assistant = client.beta.assistants.create(
-    name="VA Claims Consultant",
-    instructions=assistant_instructions,
-    tools=[
-        {
-            "type": "function",
-            "function": {
-                "name": "search_cfr_documents",
-                "description": (
-                    "Use this to retrieve official VA references from the 38 CFR. "
-                    "Provide the user's question as 'query'. "
-                    "This function will clean the query, embed the text, query Pinecone, "
-                    "and return the relevant text needed to answer the user's question."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The user's question or prompt that needs official references."
-                        },
-                        "top_k": {
-                            "type": "number",
-                            "description": "Number of top matches to retrieve (default=3)."
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "search_m21_documents",
-                "description": (
-                    "Use this to retrieve official VA references from M21-1. "
-                    "Provide the user's question as 'query'. "
-                    "This function will clean the query, embed the text, query Pinecone, "
-                    "and return the relevant text needed to answer the user's question."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The user's question or prompt that needs official references."
-                        },
-                        "top_k": {
-                            "type": "number",
-                            "description": "Number of top matches to retrieve (default=3)."
-                        }
-                    },
-                    "required": ["query"]
-                }
-            }
-        },
-    ],
-    model="gpt-4o",
-)
-
-
 ###############################################################################
 # 7. A SINGLE-TURN HELPER OR MULTI-TURN HELPER
 ###############################################################################
@@ -376,7 +298,7 @@ def continue_conversation(user_input: str, thread_id: str = None) -> dict:
     # 3) Create a new Run on the Thread
     run = client.beta.threads.runs.create(
         thread_id=thread.id,
-        assistant_id=assistant.id
+        assistant_id=assistant_id
     )
     print(f"[LOG] Created run. ID: {run.id}, status={run.status}")
 
