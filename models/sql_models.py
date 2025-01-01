@@ -1,3 +1,5 @@
+# sql_models.py contains the SQLAlchemy models for the database tables used in the application.
+
 from datetime import datetime
 import uuid
 

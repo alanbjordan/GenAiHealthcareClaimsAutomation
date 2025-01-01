@@ -5,6 +5,8 @@ import json
 import requests
 import concurrent.futures
 import time
+from flask import g
+from models.sql_models import Conditions
 from openai import OpenAI
 from pinecone import Pinecone
 
@@ -22,7 +24,7 @@ EMBEDDING_MODEL = "text-embedding-3-small"  # or whichever embedding model you p
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
-assistant_id = "asst_wLK4ntGKm10q612YMTRtJqjG"
+assistant_id = "asst_el4vgAH7WXks7fBTqfxS3t7a"
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
