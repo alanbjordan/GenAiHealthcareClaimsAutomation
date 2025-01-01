@@ -1,16 +1,14 @@
-from flask import Blueprint, request, jsonify
-from models.sql_models import File, Users, Conditions, Tag, condition_tags
+from flask import Blueprint, request, jsonify, g
+from models.sql_models import File, Users, Conditions, Tag, condition_tags, NexusTags
 from config import Config
 from datetime import datetime
 from helpers.azure_helpers import generate_sas_url, extract_blob_name
 import logging
 import time
 from sqlalchemy.orm import defer
-from database.session import ScopedSession
-from models.sql_models import *
+# from database.session import ScopedSession  # REMOVED: We'll use g.session now
 
 condition_bp = Blueprint('condition_bp', __name__)
-session = ScopedSession()
 
 @condition_bp.route('/conditions', methods=['OPTIONS', 'GET'])
 def get_conditions():
@@ -36,7 +34,7 @@ def get_conditions():
         return jsonify({"error": "User UUID is required"}), 400
 
     user_start_time = time.time()
-    user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+    user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
     user_elapsed_time = time.time() - user_start_time
 
     if not user:
@@ -53,17 +51,16 @@ def get_conditions():
 
     try:
         # Fetch conditions, files, and tags, excluding Tag.embeddings
-        conditions = session.query(
-            Conditions,
-            File,
-            Tag
-        ).options(
-            defer(Tag.embeddings)  # Exclude the 'embeddings' column
-        ).join(File, Conditions.file_id == File.file_id)\
-        .join(condition_tags, Conditions.condition_id == condition_tags.c.condition_id)\
-        .join(Tag, condition_tags.c.tag_id == Tag.tag_id)\
-        .filter(Conditions.user_id == user.user_id)\
-        .order_by(Tag.disability_name, Conditions.condition_name).all()
+        conditions = (
+            g.session.query(Conditions, File, Tag)
+            .options(defer(Tag.embeddings))  # Exclude the 'embeddings' column
+            .join(File, Conditions.file_id == File.file_id)
+            .join(condition_tags, Conditions.condition_id == condition_tags.c.condition_id)
+            .join(Tag, condition_tags.c.tag_id == Tag.tag_id)
+            .filter(Conditions.user_id == user.user_id)
+            .order_by(Tag.disability_name, Conditions.condition_name)
+            .all()
+        )
 
         query_elapsed_time = time.time() - query_start_time
         print(f"POINT OF INTEREST: Database query executed in {query_elapsed_time:.4f} seconds. Retrieved {len(conditions)} records.")
@@ -145,7 +142,7 @@ def get_conditions():
     return jsonify(response_data), 200
 
 
-@condition_bp.route("/feed_updates", methods=["GET"])
+@condition_bp.route("/feed_updates", methods=["GET", "OPTIONS"])
 def feed_updates():
     """
     Returns a list of active nexus tags along with 
@@ -154,38 +151,54 @@ def feed_updates():
     to highlight newly discovered nexus tags and the relevant 
     in-service/current conditions that triggered them.
     """
+    start_time = time.time()
+
     if request.method == 'OPTIONS':
-        print("Received CORS preflight request.")
+        print("Received CORS preflight request for /feed_updates.")
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
-        print("CORS preflight response sent.")
+        print("CORS preflight response sent for /feed_updates.")
+        print(f"Total time for OPTIONS request: {time.time() - start_time:.4f} seconds.")
         return response, 200
     
+    print("Received GET /feed_updates request.")
+
     # 1. Query all active nexus rows (revoked_at is still NULL)
-    active_nexus_tags = (
-        session.query(NexusTags)
-        .filter(NexusTags.revoked_at.is_(None))
-        .all()
-    )
+    active_nexus_tags_start = time.time()
+    try:
+        active_nexus_tags = (
+            g.session.query(NexusTags)
+            .filter(NexusTags.revoked_at.is_(None))
+            .all()
+        )
+    except Exception as e:
+        print(f"Database query failed for NexusTags: {e}")
+        return jsonify({"error": "Failed to retrieve nexus tags."}), 500
+    query_time = time.time() - active_nexus_tags_start
+    print(f"Queried active nexus tags in {query_time:.4f} seconds. Found {len(active_nexus_tags)} records.")
 
     response_data = []
 
     # 2. Build the response
+    build_response_start = time.time()
     for nexus in active_nexus_tags:
         # "tag" is the Tag object (relationship from NexusTags to Tag)
-        t = nexus.tag
+        t = nexus.tag  # Assuming a relationship is defined in your SQLAlchemy model
 
-        # 3. Find all Conditions associated with this tag
-        #    (Use your many-to-many table condition_tags)
-        conditions = (
-            session.query(Conditions)
-            .join(condition_tags, condition_tags.c.condition_id == Conditions.condition_id)
-            .filter(condition_tags.c.tag_id == t.tag_id)
-            .all()
-        )
+        # 3. Find all Conditions associated with this tag (via condition_tags)
+        try:
+            conditions = (
+                g.session.query(Conditions)
+                .join(condition_tags, condition_tags.c.condition_id == Conditions.condition_id)
+                .filter(condition_tags.c.tag_id == t.tag_id)
+                .all()
+            )
+        except Exception as e:
+            print(f"Database query failed for Conditions: {e}")
+            return jsonify({"error": "Failed to retrieve associated conditions."}), 500
 
         # 4. Assemble the list of condition dictionaries
         condition_list = []
@@ -211,4 +224,8 @@ def feed_updates():
             "conditions": condition_list,
         })
 
+    build_response_time = time.time() - build_response_start
+    print(f"Built response data in {build_response_time:.4f} seconds.")
+
+    print(f"Total time for /feed_updates request: {time.time() - start_time:.4f} seconds.")
     return jsonify(response_data), 200

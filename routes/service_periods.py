@@ -1,6 +1,6 @@
 # routes/service_periods.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 import logging
 import os
 import tempfile
@@ -12,16 +12,12 @@ from helpers.azure_helpers import upload_to_azure_blob
 from helpers.llm_helpers import process_document_based_on_type
 from helpers.text_ext_helpers import read_and_extract_document, validate_dd214
 from sqlalchemy.orm.attributes import flag_modified
-from database.session import ScopedSession
 from enum import Enum
 import time
 from config import Config
 
 # Create a blueprint for service periods routes
 service_periods_bp = Blueprint('service_periods_bp', __name__)
-
-# Use ScopedSession as per your application's session handling
-session = ScopedSession()
 
 # Setting up logger for error tracking and debugging
 logger = logging.getLogger(__name__)
@@ -38,7 +34,6 @@ def allowed_file(filename):
 # Description: Retrieves all service periods for a user
 # based on their user UUID.
 # ====================================================
-
 @service_periods_bp.route('/service-periods/<string:user_uuid>', methods=['GET'])
 def get_service_dates(user_uuid):
     """
@@ -51,19 +46,20 @@ def get_service_dates(user_uuid):
     """
     try:
         # Retrieve user by UUID
-        user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
         if not user:
             logger.warning(f'User not found for UUID: {user_uuid}')
             return jsonify({'error': 'User not found'}), 404
 
         # Retrieve service periods for the user
-        service_periods = session.query(ServicePeriod).filter_by(user_id=user.user_id).all()
+        service_periods = g.session.query(ServicePeriod).filter_by(user_id=user.user_id).all()
         response_data = [
             {
                 'branchOfService': period.branch_of_service,
                 'startDate': period.service_start_date.strftime('%Y-%m-%d'),
                 'endDate': period.service_end_date.strftime('%Y-%m-%d')
-            } for period in service_periods
+            }
+            for period in service_periods
         ]
 
         return jsonify({'service_periods': response_data}), 200
@@ -89,6 +85,7 @@ def save_service_dates():
         response.headers["Access-Control-Allow-Credentials"] = "true"
         print("CORS preflight response sent.")
         return response, 200
+
     try:
         # Extract data from the request body
         data = request.get_json()
@@ -104,13 +101,13 @@ def save_service_dates():
             return jsonify({'error': 'user_uuid and service_periods are required'}), 400
 
         # Retrieve user by UUID
-        user = Users.query.filter_by(user_uuid=user_uuid).first()
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
         if not user:
             logger.warning('User not found with provided user_uuid.')
             return jsonify({'error': 'User not found'}), 404
 
         # Remove all previous service period records for this user to avoid duplicates
-        session.query(ServicePeriod).filter_by(user_id=user.user_id).delete()
+        g.session.query(ServicePeriod).filter_by(user_id=user.user_id).delete()
 
         # Prepare new service period records for bulk saving
         new_service_periods = []
@@ -138,8 +135,8 @@ def save_service_dates():
             new_service_periods.append(service_period)
 
         # Save all new service periods in the database in a single transaction for efficiency
-        session.bulk_save_objects(new_service_periods)
-        session.commit()
+        g.session.bulk_save_objects(new_service_periods)
+        g.session.commit()
 
         # Return success response
         return jsonify({'message': 'Service periods saved successfully'}), 200
@@ -150,7 +147,7 @@ def save_service_dates():
 
     except Exception as e:
         # Handle unexpected errors, log them, and rollback the session to maintain data integrity
-        session.rollback()
+        g.session.rollback()
         logger.error(f'Failed to save service periods: {str(e)}')
         return jsonify({'error': 'An unexpected error occurred. Please try again later.'}), 500
 
@@ -179,7 +176,7 @@ def upload_dd214():
         print(f"Received upload request from user_uuid: {user_uuid}")
 
         # Query the user to get the user_id using user_uuid
-        user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
         if not user:
             logging.error(f"Invalid user UUID: {user_uuid}")
             print(f"Invalid user UUID: {user_uuid}")
@@ -292,13 +289,13 @@ def upload_dd214():
                 file_category=category,
             )
 
-            session.add(new_file)
-            session.flush()  # To get file_id
+            g.session.add(new_file)
+            g.session.flush()  # To get file_id
             file_id = new_file.file_id
             logging.info(f"Inserted new file record with file_id={file_id}")
             print(f"Inserted new file record with file_id={file_id}")
 
-            # Extract and store information using process_document_based_on_type
+            # Extract and store information
             try:
                 # Extract text from the document
                 extracted_text = read_and_extract_document(temp_file_path, 'pdf')
@@ -321,7 +318,7 @@ def upload_dd214():
                                 except ValueError as ve:
                                     logging.error(f"Invalid date format in extracted service period: {ve}")
                                     print(f"Invalid date format in extracted service period: {ve}")
-                                    # Depending on requirements, you might skip this period or handle it differently
+                                    # Optionally skip or handle differently
                                     continue
 
                                 branch_of_service = period.get('branchOfService', '')
@@ -332,8 +329,8 @@ def upload_dd214():
                                     print(f"Start date {start_date} must be before end date {end_date} in extracted service period.")
                                     continue
 
-                                # Check if the service period already exists for the user to avoid duplicates
-                                existing_period = session.query(ServicePeriod).filter_by(
+                                # Check if the service period already exists
+                                existing_period = g.session.query(ServicePeriod).filter_by(
                                     user_id=user.user_id,
                                     service_start_date=start_date,
                                     service_end_date=end_date,
@@ -345,14 +342,14 @@ def upload_dd214():
                                     print(f"Service period already exists: {existing_period}")
                                     continue
 
-                                # Create a new ServicePeriod object for each period
+                                # Create a new ServicePeriod object
                                 new_service_period = ServicePeriod(
                                     user_id=user.user_id,
                                     service_start_date=start_date,
                                     service_end_date=end_date,
                                     branch_of_service=branch_of_service
                                 )
-                                session.add(new_service_period)
+                                g.session.add(new_service_period)
 
                                 # Collect the service period to include in the response
                                 all_extracted_service_periods.append({
@@ -361,7 +358,7 @@ def upload_dd214():
                                     'branchOfService': branch_of_service
                                 })
 
-                            session.commit()
+                            g.session.commit()
                             logging.info(f"Saved extracted service periods for file_id={file_id}")
                             print(f"Saved extracted service periods for file_id={file_id}")
                         else:
@@ -374,7 +371,7 @@ def upload_dd214():
             except Exception as e:
                 logging.error(f"Failed to extract and save information from file '{uploaded_file.filename}': {e}")
                 print(f"Failed to extract and save information from file '{uploaded_file.filename}': {e}")
-                # Depending on requirements, decide whether to continue or handle differently
+                # Handle or continue based on your requirements
 
             # Append successful upload info
             uploaded_urls.append({
@@ -411,11 +408,7 @@ def upload_dd214():
         }), 201
 
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.exception(f"DD214 Upload failed: {e}")
         print(f"DD214 Upload failed: {e}")
         return jsonify({"error": "Failed to upload file(s)"}), 500
-
-    finally:
-        # Close the session if needed
-        ScopedSession.remove()
