@@ -1,6 +1,6 @@
 # routes/analysis_routes.py
 
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, g
 from models.sql_models import File  # Import the File model
 import time
 import logging

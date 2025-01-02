@@ -1,8 +1,7 @@
 # routes/document_routes.py
 
-from flask import Blueprint, request, jsonify
-from models.sql_models import * # Import File and Users models
-#from database import db  # SQLAlchemy instance
+from flask import Blueprint, request, jsonify, g
+from models.sql_models import *  # Import File and Users models
 import os
 import tempfile
 import json
@@ -15,24 +14,19 @@ import logging
 from azure.storage.blob import BlobServiceClient
 from helpers.azure_helpers import *
 from config import Config
-from helpers.azure_helpers import *
 from helpers.llm_helpers import *
 from helpers.text_ext_helpers import *
 from helpers.embedding_helpers import *
-import random
 from sqlalchemy.orm.attributes import flag_modified
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from helpers.visit_processor import process_visit
 from helpers.diagnosis_worker import worker_process_diagnosis
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from helpers.diagnosis_processor import process_diagnosis
 from helpers.diagnosis_list import process_diagnosis_list
-from database.session import ScopedSession
 from helpers.sql_helpers import *
 
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
-session = ScopedSession()
 
 # ========== DOCUMENT CRUD ROUTES ==========
 
@@ -43,6 +37,7 @@ def upload():
     
     try:
         process_start_time = time.time()
+
         if 'file' not in request.files:
             logging.error("No file part in the request")
             print("No file part in the request")
@@ -57,14 +52,14 @@ def upload():
             return jsonify({"error": "User UUID is required"}), 400
 
         # Lookup the user by UUID
-        user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
         if not user:
             logging.error(f"Invalid user UUID: {user_uuid}")
             print(f"Invalid user UUID: {user_uuid}")
             return jsonify({"error": "Invalid user UUID"}), 404
 
         # Retrieve service periods if needed
-        service_periods = session.query(ServicePeriod).filter_by(user_id=user.user_id).all()
+        service_periods = g.session.query(ServicePeriod).filter_by(user_id=user.user_id).all()
         if not service_periods:
             logging.warning(f'No service periods found for user {user_uuid}')
             print(f'No service periods found for user {user_uuid}')
@@ -147,10 +142,10 @@ def upload():
                     file_size=os.path.getsize(temp_file_path),
                     file_category=category,
                 )
-                session.add(new_file)
-                session.flush()  # Get new_file.file_id
+                g.session.add(new_file)
+                g.session.flush()  # get new_file.file_id
                 file_id = new_file.file_id
-                session.commit()
+                g.session.commit()
                 
                 logging.info(f"Inserted new file record with file_id={file_id}")
                 print(f"Inserted new file record with file_id={file_id}")
@@ -218,18 +213,18 @@ def upload():
                 })
 
         # Commit everything so newly inserted Conditions are in the DB
-        session.commit()
+        g.session.commit()
         logging.info("All files have been processed and committed to the database.")
         print("All files have been processed and committed to the database.")
 
         # Now discover any newly qualified nexus tags for this user
-        discover_nexus_tags(session, user.user_id)
+        discover_nexus_tags(g.session, user.user_id)
 
         # Optional: Revoke nexus tags that no longer qualify for this user
-        revoke_nexus_tags_if_invalid(session, user.user_id)
+        revoke_nexus_tags_if_invalid(g.session, user.user_id)
         
         # Final commit after nexus updates
-        session.commit()
+        g.session.commit()
 
         process_end_time = time.time()
         elapsed_time = process_end_time - process_start_time
@@ -239,13 +234,12 @@ def upload():
         return jsonify({"message": "File(s) processed", "files": uploaded_urls}), 201
 
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.exception(f"Upload failed: {str(e)}")
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
 
 
-    
 def extract_structured_data_from_file(file_path, file_type):
     try:
         # Read the file content
@@ -282,15 +276,14 @@ def get_documents():
 
     # GET request logic
     user_uuid = request.args.get('userUUID')
-
     if not user_uuid:
         return jsonify({"error": "User UUID is required"}), 400
 
-    user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+    user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
     if not user:
         return jsonify({"error": "Invalid user UUID"}), 404
 
-    files = session.query(File).filter_by(user_id=user.user_id).order_by(File.uploaded_at.desc()).all()
+    files = g.session.query(File).filter_by(user_id=user.user_id).order_by(File.uploaded_at.desc()).all()
 
     document_list = [{
         "id": file.file_id,
@@ -298,11 +291,12 @@ def get_documents():
         "file_category": file.file_category,
         "file_type": file.file_type,
         "size": f"{file.file_size / (1024 * 1024):.2f}MB" if file.file_size else "Unknown",
-        "shared": "Only Me", 
+        "shared": "Only Me",
         "modified": file.uploaded_at.strftime("%d/%m/%Y")
     } for file in files]
 
     return jsonify(document_list), 200
+
 
 @document_bp.route('/documents/delete/<int:file_id>', methods=['DELETE', 'OPTIONS'])
 def delete_document(file_id):
@@ -320,13 +314,13 @@ def delete_document(file_id):
         return jsonify({'error': 'Missing user UUID'}), 400
 
     # 2) Look up the user by UUID
-    user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+    user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
     try:
         # 3) Check if the file exists
-        file_record = session.query(File).get(file_id)
+        file_record = g.session.query(File).get(file_id)
         if not file_record:
             return jsonify({"error": "File not found"}), 404
 
@@ -344,17 +338,17 @@ def delete_document(file_id):
             return jsonify({"error": f"Failed to delete file from Azure: {e}"}), 500
 
         # 6) Remove the file record from the database
-        session.delete(file_record)
-        session.commit()
+        g.session.delete(file_record)
+        g.session.commit()
 
         # 7) Re-check user’s nexus tags
-        revoke_nexus_tags_if_invalid(session, user.user_id)  # pass user.user_id
-        session.commit()
+        revoke_nexus_tags_if_invalid(g.session, user.user_id)
+        g.session.commit()
 
         return jsonify({"message": "File deleted successfully"}), 200
 
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.error(f"Error deleting file with id {file_id}: {e}")
         return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
 
@@ -377,8 +371,7 @@ def rename_document(file_id):
     new_name_without_extension = os.path.splitext(new_name)[0]
 
     # Find the file by ID
-    file = session.query(File).filter_by(file_id=file_id).first()
-
+    file = g.session.query(File).filter_by(file_id=file_id).first()
     if not file:
         return jsonify({"error": "File not found"}), 404
 
@@ -405,9 +398,9 @@ def rename_document(file_id):
         properties = new_blob_client.get_blob_properties()
         copy_status = properties.copy.status
         while copy_status == 'pending':
+            time.sleep(1)
             properties = new_blob_client.get_blob_properties()
             copy_status = properties.copy.status
-            time.sleep(1)  # Pause briefly to let the copy complete
 
         if copy_status != "success":
             raise Exception("Blob copy operation failed.")
@@ -415,18 +408,19 @@ def rename_document(file_id):
         # Delete the old blob
         container_client.delete_blob(old_blob_name)
 
-        # Update the file name in the database without duplicating the extension
+        # Update the file name in the database
         file.file_name = f"{new_name_without_extension}{file_extension}"
         file.file_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{new_blob_name}"
-        session.commit()
+        g.session.commit()
         logging.info(f"File '{old_blob_name}' renamed to '{new_blob_name}' successfully.")
         
         return jsonify({"message": f"File '{old_blob_name}' renamed to '{new_name_without_extension}' successfully."}), 200
 
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.error(f"Failed to rename file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to rename file: {str(e)}"}), 500
+
 
 @document_bp.route('/documents/change-category/<int:file_id>', methods=['PUT'])
 def change_document_category(file_id):
@@ -439,8 +433,7 @@ def change_document_category(file_id):
         return jsonify({"error": "New category is required"}), 400
 
     # Find the file by ID
-    file = session.query(File).filter_by(file_id=file_id).first()
-
+    file = g.session.query(File).filter_by(file_id=file_id).first()
     if not file:
         return jsonify({"error": "File not found"}), 404
 
@@ -465,9 +458,9 @@ def change_document_category(file_id):
         properties = new_blob_client.get_blob_properties()
         copy_status = properties.copy.status
         while copy_status == 'pending':
+            time.sleep(1)
             properties = new_blob_client.get_blob_properties()
             copy_status = properties.copy.status
-            time.sleep(1)  # Pause briefly to let the copy complete
 
         if copy_status != "success":
             raise Exception("Blob copy operation failed.")
@@ -478,27 +471,22 @@ def change_document_category(file_id):
         # Update the category and blob URL in the database
         file.file_category = new_category
         file.file_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{new_blob_name}"
-        session.commit()
+        g.session.commit()
 
         logging.info(f"File category changed from '{old_category}' to '{new_category}' for file '{file.file_name}'.")
         
         return jsonify({"message": f"Category updated successfully to '{new_category}' for file '{file.file_name}'."}), 200
 
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.error(f"Failed to change category for file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to change category: {str(e)}"}), 500
-
-# Helper function to extract blob name from URL
-def extract_blob_name(blob_url):
-    """Extracts the blob name from the Azure Blob Storage URL."""
-    return '/'.join(blob_url.split('/')[-3:])  # Assuming our URL format for easy extraction
 
 @document_bp.route('/documents/download/<int:file_id>', methods=['GET'])
 def download_document(file_id):
     try:
         # Fetch the file from the database
-        file = session.query(File).filter_by(file_id=file_id).first()
+        file = g.session.query(File).filter_by(file_id=file_id).first()
         if not file:
             return jsonify({"error": "File not found"}), 404
 
@@ -513,7 +501,7 @@ def download_document(file_id):
 def preview_document(file_id):
     try:
         # Fetch the file from the database
-        file = session.query(File).filter_by(file_id=file_id).first()
+        file = g.session.query(File).filter_by(file_id=file_id).first()
         if not file:
             return jsonify({"error": "File not found"}), 404
 
@@ -527,7 +515,7 @@ def preview_document(file_id):
             blob_name=blob_name,
             account_key=account_key,
             permission=BlobSasPermissions(read=True),
-            expiry=datetime.utcnow() + timedelta(hours=1)  # 1-hour validity
+            expiry=datetime.utcnow() + timedelta(hours=1)
         )
 
         if not sas_token:
@@ -537,7 +525,6 @@ def preview_document(file_id):
         # Construct the preview URL using the SAS token and set disposition to inline
         preview_url = f"{file.file_url}?{sas_token}&response-content-disposition=inline"
 
-        # Return the preview URL as JSON (without setting incorrect headers)
         return jsonify({"preview_url": preview_url}), 200
 
     except FileNotFoundError as e:
@@ -550,7 +537,6 @@ def preview_document(file_id):
         logging.error(f"Failed to generate preview URL for file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to generate preview URL: {str(e)}"}), 500
 
-# Upload file to Azure
 @document_bp.route('/upload-file', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -583,7 +569,6 @@ def upload_file():
     else:
         return jsonify({"error": "Failed to upload file"}), 500
 
-# Get SAS URL
 @document_bp.route('/get-file-url/<blob_name>', methods=['GET'])
 def get_file_url(blob_name):
     try:
@@ -596,5 +581,4 @@ def get_file_url(blob_name):
         else:
             return jsonify({"error": "Failed to generate SAS URL"}), 500
     except Exception as e:
-        # Handle general errors and return a JSON error response
         return jsonify({"error": str(e)}), 500

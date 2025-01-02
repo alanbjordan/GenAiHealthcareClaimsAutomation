@@ -1,8 +1,7 @@
 # routes/auth_routes.py
 
-from flask import Blueprint, request, jsonify
-from models.sql_models import *  # Correct absolute import for Users
-#from database import db  # Correct absolute import for db
+from flask import Blueprint, request, jsonify, g
+from models.sql_models import Users
 import uuid
 import logging
 from google.oauth2 import id_token
@@ -11,12 +10,10 @@ import os
 import jwt
 from datetime import datetime, timedelta
 from config import Config
-from database.session import ScopedSession
 
 # Create a Blueprint for auth routes
 auth_bp = Blueprint('auth_bp', __name__)
 
-session=ScopedSession()
 # ----- Sign-up Endpoint -----
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
@@ -32,7 +29,8 @@ def signup():
         logging.warning('Missing required fields in signup request')
         return jsonify({"error": "First name, last name, email, and password are required"}), 400
 
-    if session.query(Users).filter(Users.email == email).first():
+    # Use g.session (instead of session)
+    if g.session.query(Users).filter(Users.email == email).first():
         logging.warning('User with email %s already exists', email)
         return jsonify({"error": "User with that email already exists"}), 409
 
@@ -46,8 +44,8 @@ def signup():
     logging.debug('Created new user object for email: %s', email)
 
     try:
-        session.add(new_user)
-        session.commit()
+        g.session.add(new_user)
+        g.session.commit()
         logging.info('User with email %s created successfully', email)
         return jsonify({
             "message": "User created successfully",
@@ -55,7 +53,7 @@ def signup():
             "user_id": new_user.user_id,
         }), 201
     except Exception as e:
-        session.rollback()
+        g.session.rollback()
         logging.error('Failed to create user with email %s: %s', email, str(e))
         return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
 
@@ -73,7 +71,7 @@ def login():
         logging.warning('Missing email or password in login request')
         return jsonify({"error": "Email and password are required"}), 400
 
-    user = session.query(Users).filter_by(email=email).first()
+    user = g.session.query(Users).filter_by(email=email).first()
     if user and user.check_password(password):
         logging.info('User with email %s logged in successfully', email)
         return jsonify({
@@ -103,16 +101,24 @@ def google_login():
     
     try:
         # Verify the Google ID token
-        id_info = id_token.verify_oauth2_token(token, google_requests.Request(), os.getenv("GOOGLE_CLIENT_ID"), clock_skew_in_seconds=20)
+        id_info = id_token.verify_oauth2_token(
+            token, 
+            google_requests.Request(), 
+            os.getenv("GOOGLE_CLIENT_ID"), 
+            clock_skew_in_seconds=20
+        )
         email = id_info.get('email')
         first_name = id_info.get('given_name', '')
         last_name = id_info.get('family_name', '')
         google_id = id_info.get('sub')
 
-        logging.debug('Google ID token verified. Extracted info: email=%s, first_name=%s, last_name=%s', email, first_name, last_name)
+        logging.debug(
+            'Google ID token verified. Extracted info: email=%s, first_name=%s, last_name=%s', 
+            email, first_name, last_name
+        )
 
         # Check if user already exists in the database
-        user = session.query(Users).filter_by(email=email).first()
+        user = g.session.query(Users).filter_by(email=email).first()
 
         # Flag to indicate if the user is new
         is_new_user = False
@@ -126,8 +132,8 @@ def google_login():
                 google_id=google_id,
                 user_uuid=str(uuid.uuid4())
             )
-            session.add(user)
-            session.commit()
+            g.session.add(user)
+            g.session.commit()
             logging.info('New Google user created with email %s', email)
             is_new_user = True  # Set flag to true for new users
 

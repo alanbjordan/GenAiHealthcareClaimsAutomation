@@ -1,7 +1,9 @@
 # routes/chatbot_route.py
-from flask import Blueprint, request, jsonify
-from config import Config  # or wherever you store your config
+from flask import Blueprint, request, jsonify, g
+from config import Config
 from helpers.chatbot_helper import continue_conversation
+from models.sql_models import Users
+import traceback
 
 chatbot_bp = Blueprint("chatbot_bp", __name__)
 
@@ -9,11 +11,13 @@ chatbot_bp = Blueprint("chatbot_bp", __name__)
 def chat():
     """
     Handle a single user message and get a single assistant response, 
-    with optional multi-turn memory via thread_id.
+    with optional multi-turn memory via thread_id, and user identification via user_uuid.
+
     Expects JSON:
     {
         "message": "<User's question or statement>",
-        "thread_id": "<optional existing thread ID>"
+        "thread_id": "<optional existing thread ID>",
+        "user_uuid": "<the user’s UUID (optional)>"
     }
     Returns JSON:
     {
@@ -33,23 +37,51 @@ def chat():
         })
         return response, 200
 
-    # 2) Parse JSON request body
-    data = request.get_json(force=True)  # force=True just in case
-    if not data:
-        return jsonify({"error": "Missing JSON body"}), 400
+    try:
+        # 2) Parse JSON request body
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"error": "Missing JSON body"}), 400
 
-    user_message = data.get("message", "")
-    thread_id = data.get("thread_id")
+        user_message = data.get("message", "")
+        thread_id = data.get("thread_id")
+        user_uuid = data.get("user_uuid")  # Retrieve the user’s UUID
 
-    if not user_message:
-        return jsonify({"error": "No 'message' provided"}), 400
+        if not user_message:
+            return jsonify({"error": "No 'message' provided"}), 400
 
-    # 3) Call our helper to continue or start a conversation
-    result = continue_conversation(user_input=user_message, thread_id=thread_id)
+        print(f"User UUID received: {user_uuid}")
 
-    # 4) Return the assistant's response + the updated thread_id
-    response_data = {
-        "assistant_message": result["assistant_message"],
-        "thread_id": result["thread_id"]
-    }
-    return jsonify(response_data), 200
+        # 3) Look up the user in the DB
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
+        if not user:
+            print(f"Invalid user UUID: {user_uuid}")
+            return jsonify({"error": "Invalid user UUID"}), 404
+
+        # Retrieve the user_id (and optionally first/last name, email, etc.)
+        db_user_id = user.user_id
+        first_name = user.first_name  # or user.last_name, user.email, etc.
+        print(f"[DEBUG] Found user_id={db_user_id} for UUID={user_uuid} (First name: {first_name})")
+
+        # 4) Build your system_msg (optional)
+        system_message = f"My  first name is {first_name}, and  user_id is {db_user_id}."
+
+        # 5) Call continue_conversation, passing system_msg
+        result = continue_conversation(
+            user_id = db_user_id,
+            user_input=user_message,
+            thread_id=thread_id,
+            system_msg=system_message  # <--- pass here
+        )
+
+        # 6) Return the assistant response
+        response_data = {
+            "assistant_message": result["assistant_message"],
+            "thread_id": result["thread_id"]
+        }
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        print("[ERROR] An exception occurred in /chat route:")
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
