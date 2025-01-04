@@ -157,3 +157,16 @@ class NexusTags(db.Model):
     # Relationships
     tag = db.relationship('Tag', backref='nexus_tags', lazy='select')
     user = db.relationship('Users', backref='nexus_tags', lazy='select')
+
+class NexusSummary(db.Model):
+    __tablename__ = 'nexus_summaries'
+
+    nexus_summary_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    nexus_tags_id = db.Column(db.Integer, db.ForeignKey('nexus_tags.nexus_tags_id', ondelete='CASCADE'), nullable=False)
+    summary_text = db.Column(db.Text, nullable=True)
+    condition_ids = db.Column(ARRAY(db.Integer), nullable=True)
+    needs_update = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
+    updated_at = db.Column(db.DateTime, onupdate=func.now())
+    # Relationship back to NexusTags
+    nexus_tag = db.relationship('NexusTags', backref=db.backref('nexus_summaries', lazy='select', cascade='all, delete-orphan'))
