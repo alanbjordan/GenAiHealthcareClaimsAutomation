@@ -18,3 +18,6 @@ __pycache__/
 
 # Ignore .pyc files
 *.pyc
+
+# Ignore .pyo files
+*.py[cod]
