@@ -9,3 +9,15 @@ node_modules/
 
 # Ignore venv files
 venv/
+
+# Ignore .env file
+.env
+
+# Ignore __pycache__ folder
+__pycache__/
+
+# Ignore .pyc files
+*.pyc
+
+# Ignore .pyo files
+*.py[cod]
