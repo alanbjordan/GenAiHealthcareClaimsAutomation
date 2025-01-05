@@ -170,3 +170,15 @@ class NexusSummary(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=func.now())
     # Relationship back to NexusTags
     nexus_tag = db.relationship('NexusTags', backref=db.backref('nexus_summaries', lazy='select', cascade='all, delete-orphan'))
+
+class RefreshToken(db.Model):
+    __tablename__ = 'refresh_tokens'
+
+    refresh_token_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    token = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship back to the Users model
+    user = db.relationship('Users', backref='refresh_tokens', lazy='select')
