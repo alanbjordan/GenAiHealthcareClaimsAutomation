@@ -1,10 +1,12 @@
 # routes/bva_routes.py - BVA routes for the VA Decision API.
 
-from flask import Blueprint, request, jsonify, Response
-from bs4 import BeautifulSoup
-import requests
-from datetime import datetime
 import math
+from datetime import datetime
+
+import requests
+import chardet
+from bs4 import BeautifulSoup
+from flask import Blueprint, request, jsonify, Response
 
 bva_bp = Blueprint('bva_bp', __name__)
 
@@ -40,7 +42,6 @@ def bva_search():
         page = 1
 
     t = log_with_timing(t, f"[bva_search][GET] Received query={query}, page={page}")
-
     results, total_results, t = fetch_page("https://search.usa.gov/search/docs", query, page, t)
 
     if total_results is not None:
@@ -82,9 +83,6 @@ def fetch_page(base_url, query, page, timing_prev):
             if span and span.text:
                 # e.g. "91,386 results"
                 text = span.text.strip()
-                # remove non-digits and parse int
-                # text could look like "91,386 results"
-                # so we remove anything non-numeric except for comma
                 digits_only = "".join(ch for ch in text if ch.isdigit())
                 if digits_only.isdigit():
                     total_results = int(digits_only)
@@ -199,10 +197,18 @@ def bva_decision_text_proxy():
             t = log_with_timing(t, f"[bva_decision_text_proxy][GET][ERROR] Unable to retrieve decision text from {url}")
             return jsonify({"error": "Unable to retrieve decision text"}), 404
 
-        # Return raw content as plain text directly.
-        response = Response(dec_response.content, mimetype='text/plain')
+        # --- Chardet-based encoding detection ---
+        raw_bytes = dec_response.content
+        detected = chardet.detect(raw_bytes)
+        detected_encoding = detected['encoding'] or 'utf-8'
+        
+        # Decode into a Python string using the detected (or fallback) encoding
+        decoded_text = raw_bytes.decode(detected_encoding, errors='replace')
+
+        # Return decoded text as plain text (UTF-8)
+        response = Response(decoded_text, mimetype='text/plain; charset=utf-8')
         response.headers["Access-Control-Allow-Origin"] = "*"
-        t = log_with_timing(t, "[bva_decision_text_proxy][GET] Returning raw decision text.")
+        t = log_with_timing(t, "[bva_decision_text_proxy][GET] Returning decoded decision text.")
         return response, 200
 
     except requests.exceptions.Timeout:
