@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, g
 from models.sql_models import UserDecisionSaves, Users
 from database.session import ScopedSession
 from config import Config
-import jwt
+import jwt  # We likely don't need this import anymore if token-based logic is removed
 from datetime import datetime
 from helpers.llm_helpers import structured_summarize_bva_decision_llm
 
@@ -41,21 +41,18 @@ def remove_session(exception=None):
     else:
         t = log_with_timing(t, "[TEARDOWN_REQUEST] No session found.")
 
-def get_user_from_token(request):
-    t = log_with_timing(None, "[get_user_from_token] Extracting user from token...")
-    auth_header = request.headers.get('Authorization')
-    if not auth_header:
-        t = log_with_timing(t, "[get_user_from_token] No Authorization header found.")
-        return None, "Authorization token is required"
-    try:
-        token = auth_header.split(" ")[1]
-        payload = jwt.decode(token, Config.SECRET_KEY, algorithms=['HS256'])
-        user_uuid = payload.get('user_uuid')
-        t = log_with_timing(t, f"[get_user_from_token] Successfully decoded token for user_uuid: {user_uuid}")
-        return user_uuid, None
-    except Exception as e:
-        t = log_with_timing(t, f"[get_user_from_token][ERROR] Error decoding token: {e}")
-        return None, "Invalid or expired token"
+
+### CHANGED: Remove all token-based logic and define a new function for user_uuid header.
+
+def get_user_uuid_from_request(request):
+    t = log_with_timing(None, "[get_user_uuid_from_request] Extracting user_uuid from headers...")
+    user_uuid = request.headers.get("user-uuid")
+    if not user_uuid:
+        t = log_with_timing(t, "[get_user_uuid_from_request][ERROR] user-uuid header missing.")
+        return None, "user-uuid header is required."
+    t = log_with_timing(t, f"[get_user_uuid_from_request] user_uuid found: {user_uuid}")
+    return user_uuid, None
+
 
 @decision_bp.route('/user_decision_save', methods=['GET', 'POST', 'OPTIONS'])
 def user_decision_save():
@@ -71,10 +68,11 @@ def user_decision_save():
         t = log_with_timing(t, "[user_decision_save] Returning OPTIONS response.")
         return response, 200
 
-    user_uuid, error = get_user_from_token(request)
+    ### CHANGED: We now get user_uuid from the new helper, not from token
+    user_uuid, error = get_user_uuid_from_request(request)
     if error:
-        t = log_with_timing(t, f"[user_decision_save][WARNING] Invalid user token: {error}")
-        return jsonify({"error": error}), 403
+        t = log_with_timing(t, f"[user_decision_save][WARNING] Missing user_uuid: {error}")
+        return jsonify({"error": error}), 400
 
     session = g.session
     t = log_with_timing(t, f"[user_decision_save] Fetching user from DB for user_uuid: {user_uuid}")
@@ -91,14 +89,16 @@ def user_decision_save():
             t = log_with_timing(t, "[user_decision_save][GET][WARNING] Missing decision_citation parameter.")
             return jsonify({"error": "decision_citation is required"}), 400
 
-        t = log_with_timing(t, f"[user_decision_save][GET] Querying UserDecisionSaves for user_id={user.user_id}, citation={decision_citation}")
-        uds = session.query(UserDecisionSaves).filter_by(user_id=user.user_id, decision_citation=decision_citation).first()
+        t = log_with_timing(t, f"[user_decision_save][GET] Querying for user_id={user.user_id}, citation={decision_citation}")
+        uds = session.query(UserDecisionSaves).filter_by(
+            user_id=user.user_id,
+            decision_citation=decision_citation
+        ).first()
         if uds:
             t = log_with_timing(t, f"[user_decision_save][GET] Found existing record (id={uds.id}). Returning record.")
             return jsonify({
                 "id": uds.id,
                 "decision_citation": uds.decision_citation,
-                # Notes structure is flexible. Now expected { comments: [...] }
                 "notes": uds.notes or {},
                 "created_at": uds.created_at.isoformat(),
                 "updated_at": uds.updated_at.isoformat()
@@ -116,10 +116,13 @@ def user_decision_save():
             t = log_with_timing(t, "[user_decision_save][POST][WARNING] Missing decision_citation in request body.")
             return jsonify({"error": "decision_citation is required"}), 400
 
-        # Notes expected as { comments: [...] } but we store as-is.
         notes = data.get('notes', {})
-        t = log_with_timing(t, f"[user_decision_save][POST] Checking if record exists in DB for user_id={user.user_id}, decision_citation={decision_citation}")
-        uds = session.query(UserDecisionSaves).filter_by(user_id=user.user_id, decision_citation=decision_citation).first()
+        t = log_with_timing(t, f"[user_decision_save][POST] Checking if record exists for user_id={user.user_id}, citation={decision_citation}")
+        uds = session.query(UserDecisionSaves).filter_by(
+            user_id=user.user_id,
+            decision_citation=decision_citation
+        ).first()
+
         if uds:
             t = log_with_timing(t, f"[user_decision_save][POST] Record found (id={uds.id}). Updating notes.")
             uds.notes = notes
@@ -150,10 +153,11 @@ def structured_summarize_bva_decision():
         t = log_with_timing(t, "[structured_summarize_bva_decision] Returning OPTIONS response.")
         return response, 200
 
-    user_uuid, error = get_user_from_token(request)
+    ### CHANGED: Again, we use the new helper
+    user_uuid, error = get_user_uuid_from_request(request)
     if error:
-        t = log_with_timing(t, f"[structured_summarize_bva_decision][WARNING] Invalid token: {error}")
-        return jsonify({"error": error}), 403
+        t = log_with_timing(t, f"[structured_summarize_bva_decision][WARNING] Missing user_uuid: {error}")
+        return jsonify({"error": error}), 400
 
     session = g.session
     t = log_with_timing(t, f"[structured_summarize_bva_decision] Fetching user from DB for user_uuid: {user_uuid}")
@@ -172,11 +176,11 @@ def structured_summarize_bva_decision():
         return jsonify({"error": "decision_citation and fullText are required"}), 400
 
     try:
-        t = log_with_timing(t, f"[structured_summarize_bva_decision] Calling structured_summarize_bva_decision_llm with decision_citation={decision_citation}")
+        t = log_with_timing(t, f"[structured_summarize_bva_decision] Calling structured_summarize_bva_decision_llm(...)")
         structured_data = structured_summarize_bva_decision_llm(decision_citation, full_text)
-        t = log_with_timing(t, f"[structured_summarize_bva_decision] Received structured_data: {structured_data}")
+        t = log_with_timing(t, f"[structured_summarize_bva_decision] Received structured_data.")
     except Exception as e:
-        t = log_with_timing(t, f"[structured_summarize_bva_decision][ERROR] Error extracting structured summary from decision: {e}")
+        t = log_with_timing(t, f"[structured_summarize_bva_decision][ERROR] Error extracting structured summary: {e}")
         return jsonify({"error": "Could not generate structured summary."}), 500
 
     t = log_with_timing(t, "[structured_summarize_bva_decision] Returning structured_data.")
