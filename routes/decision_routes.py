@@ -96,16 +96,21 @@ def user_decision_save():
         ).first()
         if uds:
             t = log_with_timing(t, f"[user_decision_save][GET] Found existing record (id={uds.id}). Returning record.")
+            # Ensure that 'summary' is included within 'notes'
+            notes_with_summary = uds.notes or {}
+            if 'summary' not in notes_with_summary:
+                notes_with_summary['summary'] = ""  # Initialize summary if not present
+
             return jsonify({
                 "id": uds.id,
                 "decision_citation": uds.decision_citation,
-                "notes": uds.notes or {},
+                "notes": notes_with_summary,
                 "created_at": uds.created_at.isoformat(),
                 "updated_at": uds.updated_at.isoformat()
             }), 200
         else:
-            t = log_with_timing(t, "[user_decision_save][GET] No record found. Returning empty notes.")
-            return jsonify({"notes": {}}), 200
+            t = log_with_timing(t, "[user_decision_save][GET] No record found. Returning empty notes with summary.")
+            return jsonify({"notes": {"comments": [], "highlights": [], "summary": ""}}), 200
 
     elif request.method == 'POST':
         t = log_with_timing(t, "[user_decision_save][POST] Processing POST request...")
@@ -117,6 +122,10 @@ def user_decision_save():
             return jsonify({"error": "decision_citation is required"}), 400
 
         notes = data.get('notes', {})
+        # Ensure 'summary' is part of 'notes'
+        if 'summary' not in notes:
+            notes['summary'] = ""  # Initialize summary if not provided
+
         t = log_with_timing(t, f"[user_decision_save][POST] Checking if record exists for user_id={user.user_id}, citation={decision_citation}")
         uds = session.query(UserDecisionSaves).filter_by(
             user_id=user.user_id,
@@ -136,8 +145,10 @@ def user_decision_save():
             )
             session.add(uds)
 
-        t = log_with_timing(t, "[user_decision_save][POST] Notes saved/updated successfully.")
-        return jsonify({"message": "Notes saved successfully"}), 200
+        session.commit()
+        t = log_with_timing(t, "[user_decision_save][POST] Notes and summary saved/updated successfully.")
+        return jsonify({"message": "Notes and summary saved successfully"}), 200
+
 
 @decision_bp.route('/structured_summarize_bva_decision', methods=['POST', 'OPTIONS'])
 def structured_summarize_bva_decision():
