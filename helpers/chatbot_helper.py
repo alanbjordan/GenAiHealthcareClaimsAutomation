@@ -32,7 +32,7 @@ EMBEDDING_MODEL_LARGE = "text-embedding-3-large"
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
-assistant_id = "asst_6wXNoggBmWzveUyLGFH6Ha2g"
+assistant_id = "asst_oKWkNNCPRQ1X9qCLHEApRD0D"
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
