@@ -48,15 +48,39 @@ def signup():
         g.session.add(new_user)
         g.session.commit()
         logging.info('User with email %s created successfully', email)
+
+        # Generate tokens
+        access_token_str = create_jwt_token(new_user.user_uuid, new_user.email, expires_in_hours=1)
+        refresh_token_str = create_jwt_token(new_user.user_uuid, new_user.email, expires_in_hours=24*30)
+
+        # Store refresh token in DB
+        decoded_refresh = decode_jwt_no_verify(refresh_token_str)
+        exp_timestamp = decoded_refresh.get('exp')
+        expires_dt = datetime.utcfromtimestamp(exp_timestamp)
+
+        new_db_refresh = RefreshToken(
+            user_id=new_user.user_id,
+            token=refresh_token_str,
+            expires_at=expires_dt
+        )
+        g.session.add(new_db_refresh)
+        g.session.commit()
+
         return jsonify({
             "message": "User created successfully",
             "user_uuid": new_user.user_uuid,
             "user_id": new_user.user_id,
+            "email": new_user.email,
+            "first_name": new_user.first_name,
+            "last_name": new_user.last_name,
+            "access_token": access_token_str,
+            "refresh_token": refresh_token_str,
         }), 201
     except Exception as e:
         g.session.rollback()
         logging.error('Failed to create user with email %s: %s', email, str(e))
         return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
+
 
 
 # Utility function to create JWT payload
