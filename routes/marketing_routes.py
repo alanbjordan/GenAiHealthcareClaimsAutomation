@@ -28,7 +28,7 @@ def add_to_waitlist():
         email = data.get('email')
         name = data.get('name', '')  # Full name provided, split it
         first_name, last_name = (name.split(' ', 1) + [''])[:2]  # Split into first and last name
-        veteran_status = data.get('veteranStatus')
+        veteran_status = data.get('veteranStatus', None)
         service_branch = data.get('serviceBranch', '')
 
         # Validate required fields
