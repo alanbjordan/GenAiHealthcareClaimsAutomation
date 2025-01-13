@@ -135,15 +135,11 @@ class Waitlist(db.Model):
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(255), nullable=False)
-    name = db.Column(db.String(255))
-    veteran_status = db.Column(db.String(10))   # e.g. "yes" or "no"
-    service_branch = db.Column(db.String(50))   # e.g. "army", "navy", etc.
+    first_name = db.Column(db.String(255))  # Added first_name
+    last_name = db.Column(db.String(255))   # Added last_name
+    veteran_status = db.Column(db.String(10))  # e.g., "yes" or "no"
+    service_branch = db.Column(db.String(50))  # e.g., "army", "navy", etc.
     signup_date = db.Column(db.DateTime, default=func.now())
-    theme_mode = db.Column(db.String(10), default='light')
-    country = db.Column(db.String(50))
-    region = db.Column(db.String(50))
-    city = db.Column(db.String(50))
-    zip_code = db.Column(db.String(20))
 
 class NexusTags(db.Model):
     __tablename__ = 'nexus_tags'
