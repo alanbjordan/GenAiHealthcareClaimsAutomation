@@ -26,6 +26,7 @@ class Users(db.Model):
     service_periods = db.relationship('ServicePeriod', back_populates='user', cascade="all, delete-orphan", lazy='select')
     files = db.relationship('File', back_populates='user', cascade="all, delete-orphan", lazy='select')
     conditions = db.relationship('Conditions', back_populates='user', cascade="all, delete-orphan", lazy='select')
+    saved_decisions = db.relationship('UserDecisionSaves', back_populates='user', cascade="all, delete-orphan", lazy='select')  # New relationship
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -124,11 +125,13 @@ class UserDecisionSaves(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
     decision_citation = db.Column(db.String(255), nullable=False)
+    decision_url = db.Column(db.String(500), nullable=False)
     notes = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    user = db.relationship('Users', backref='saved_decisions', lazy='select')
+    user = db.relationship('Users', back_populates='saved_decisions', lazy='select')
+
 
 class Waitlist(db.Model):
     __tablename__ = 'waitlist'
