@@ -68,7 +68,6 @@ def user_decision_save():
         t = log_with_timing(t, "[user_decision_save] Returning OPTIONS response.")
         return response, 200
 
-    ### CHANGED: We now get user_uuid from the new helper, not from token
     user_uuid, error = get_user_uuid_from_request(request)
     if error:
         t = log_with_timing(t, f"[user_decision_save][WARNING] Missing user_uuid: {error}")
@@ -96,14 +95,14 @@ def user_decision_save():
         ).first()
         if uds:
             t = log_with_timing(t, f"[user_decision_save][GET] Found existing record (id={uds.id}). Returning record.")
-            # Ensure that 'summary' is included within 'notes'
             notes_with_summary = uds.notes or {}
             if 'summary' not in notes_with_summary:
-                notes_with_summary['summary'] = ""  # Initialize summary if not present
+                notes_with_summary['summary'] = ""
 
             return jsonify({
                 "id": uds.id,
                 "decision_citation": uds.decision_citation,
+                "decision_url": uds.decision_url,  # Include decision_url
                 "notes": notes_with_summary,
                 "created_at": uds.created_at.isoformat(),
                 "updated_at": uds.updated_at.isoformat()
@@ -117,14 +116,14 @@ def user_decision_save():
         data = request.get_json()
         t = log_with_timing(t, f"[user_decision_save][POST] JSON data received: {data}")
         decision_citation = data.get('decision_citation')
+        decision_url = data.get('decision_url')  # Extract decision_url from the request
         if not decision_citation:
             t = log_with_timing(t, "[user_decision_save][POST][WARNING] Missing decision_citation in request body.")
             return jsonify({"error": "decision_citation is required"}), 400
 
         notes = data.get('notes', {})
-        # Ensure 'summary' is part of 'notes'
         if 'summary' not in notes:
-            notes['summary'] = ""  # Initialize summary if not provided
+            notes['summary'] = ""
 
         t = log_with_timing(t, f"[user_decision_save][POST] Checking if record exists for user_id={user.user_id}, citation={decision_citation}")
         uds = session.query(UserDecisionSaves).filter_by(
@@ -133,21 +132,24 @@ def user_decision_save():
         ).first()
 
         if uds:
-            t = log_with_timing(t, f"[user_decision_save][POST] Record found (id={uds.id}). Updating notes.")
+            t = log_with_timing(t, f"[user_decision_save][POST] Record found (id={uds.id}). Updating notes and URL.")
             uds.notes = notes
+            uds.decision_url = decision_url  # Update the decision_url
             uds.updated_at = datetime.utcnow()
         else:
             t = log_with_timing(t, "[user_decision_save][POST] No existing record. Creating new entry.")
             uds = UserDecisionSaves(
                 user_id=user.user_id,
                 decision_citation=decision_citation,
+                decision_url=decision_url,  # Save the decision_url
                 notes=notes
             )
             session.add(uds)
 
         session.commit()
-        t = log_with_timing(t, "[user_decision_save][POST] Notes and summary saved/updated successfully.")
-        return jsonify({"message": "Notes and summary saved successfully"}), 200
+        t = log_with_timing(t, "[user_decision_save][POST] Notes, URL, and summary saved/updated successfully.")
+        return jsonify({"message": "Notes, URL, and summary saved successfully"}), 200
+
 
 
 @decision_bp.route('/structured_summarize_bva_decision', methods=['POST', 'OPTIONS'])
@@ -196,3 +198,50 @@ def structured_summarize_bva_decision():
 
     t = log_with_timing(t, "[structured_summarize_bva_decision] Returning structured_data.")
     return jsonify(structured_data), 200
+
+@decision_bp.route('/user_decisions', methods=['GET', 'OPTIONS'])
+def get_all_user_decisions():
+    t = log_with_timing(None, f"[get_all_user_decisions] Route called with method {request.method}")
+
+    if request.method == 'OPTIONS':
+        t = log_with_timing(t, "[get_all_user_decisions] Handling OPTIONS request.")
+        response = jsonify({"message": "CORS preflight successful"})
+        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        t = log_with_timing(t, "[get_all_user_decisions] Returning OPTIONS response.")
+        return response, 200
+
+    # Extract user UUID from request headers
+    user_uuid, error = get_user_uuid_from_request(request)
+    if error:
+        t = log_with_timing(t, f"[get_all_user_decisions][WARNING] Missing user_uuid: {error}")
+        return jsonify({"error": error}), 400
+
+    session = g.session
+    t = log_with_timing(t, f"[get_all_user_decisions] Fetching user from DB for user_uuid: {user_uuid}")
+    user = session.query(Users).filter_by(user_uuid=user_uuid).first()
+
+    if not user:
+        t = log_with_timing(t, f"[get_all_user_decisions][WARNING] User not found for user_uuid: {user_uuid}")
+        return jsonify({"error": "Invalid user UUID"}), 404
+
+    t = log_with_timing(t, f"[get_all_user_decisions] Querying saved decisions for user_id={user.user_id}")
+    saved_decisions = session.query(UserDecisionSaves).filter_by(user_id=user.user_id).all()
+
+    # Format the response data
+    decisions_data = [
+        {
+            "id": decision.id,
+            "decision_citation": decision.decision_citation,
+            "decision_url": decision.decision_url,  # Add this line
+            "notes": decision.notes,
+            "created_at": decision.created_at.isoformat(),
+            "updated_at": decision.updated_at.isoformat()
+        }
+        for decision in saved_decisions
+    ]
+
+    t = log_with_timing(t, "[get_all_user_decisions] Returning saved decisions.")
+    return jsonify({"saved_decisions": decisions_data}), 200
