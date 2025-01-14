@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify, g
 from config import Config
 from helpers.chatbot_helper import continue_conversation
-from models.sql_models import Users
+from models.sql_models import Users, ServicePeriod
 import traceback
 
 chatbot_bp = Blueprint("chatbot_bp", __name__)
@@ -63,18 +63,34 @@ def chat():
         first_name = user.first_name  # or user.last_name, user.email, etc.
         print(f"[DEBUG] Found user_id={db_user_id} for UUID={user_uuid} (First name: {first_name})")
 
-        # 4) Build your system_msg (optional)
-        system_message = f"My  first name is {first_name}, and  user_id is {db_user_id}."
+        # 4) Retrieve the user's service periods
+        service_periods = g.session.query(ServicePeriod).filter_by(user_id=db_user_id).all()
+        if service_periods:
+            formatted_service_periods = [
+                f"{sp.branch_of_service} from {sp.service_start_date.strftime('%Y-%m-%d')} to {sp.service_end_date.strftime('%Y-%m-%d')}"
+                for sp in service_periods
+            ]
+            service_periods_str = "; ".join(formatted_service_periods)
+        else:
+            service_periods_str = "No service periods found."
 
-        # 5) Call continue_conversation, passing system_msg
+        print(f"[DEBUG] Service periods for user_id={db_user_id}: {service_periods_str}")
+
+        # 5) Build the system_message
+        system_message = (
+            f"My first name is {first_name}, user_id is {db_user_id}, "
+            f"and my service periods are: {service_periods_str}."
+        )
+
+        # 6) Call continue_conversation, passing system_msg
         result = continue_conversation(
-            user_id = db_user_id,
+            user_id=db_user_id,
             user_input=user_message,
             thread_id=thread_id,
             system_msg=system_message  # <--- pass here
         )
 
-        # 6) Return the assistant response
+        # 7) Return the assistant response
         response_data = {
             "assistant_message": result["assistant_message"],
             "thread_id": result["thread_id"]
