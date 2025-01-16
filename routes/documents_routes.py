@@ -34,7 +34,7 @@ document_bp = Blueprint('document_bp', __name__)
 def upload():
     if request.method == 'OPTIONS':
         response = jsonify({"message": "CORS preflight handled"})
-        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        response.headers["Access-Control-Allow-Origin"] = "https://salmon-meadow-04fc6a810.4.azurestaticapps.net"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
