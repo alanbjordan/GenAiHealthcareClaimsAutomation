@@ -25,7 +25,7 @@ def get_conditions():
         print(f"Total time for OPTIONS request: {time.time() - start_time:.4f} seconds.")
         return response, 200
 
-    user_uuid = request.args.get('userUUID')
+    user_uuid = request.headers.get("userUUID")
     print(f"Received GET /conditions request with userUUID: {user_uuid}")
 
     if not user_uuid:
@@ -150,7 +150,7 @@ def feed_updates():
         print("Received CORS preflight request for /feed_updates.")
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-UUID"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         print("CORS preflight response sent for /feed_updates.")
@@ -160,7 +160,7 @@ def feed_updates():
     print("Received GET /feed_updates request.")
 
     # Extract the user UUID from the headers
-    user_uuid = request.headers.get("user-UUID")
+    user_uuid = request.headers.get("userUUID")
     if not user_uuid:
         print("Missing user-uuid in request headers.")
         return jsonify({"error": "Missing user-uuid in headers."}), 400
