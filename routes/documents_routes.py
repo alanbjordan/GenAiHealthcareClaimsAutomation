@@ -282,7 +282,7 @@ def get_documents():
         return response, 200
 
     # GET request logic
-    user_uuid = request.args.get('userUUID')
+    user_uuid = request.form.get('userUUID')
     if not user_uuid:
         return jsonify({"error": "User UUID is required"}), 400
 
