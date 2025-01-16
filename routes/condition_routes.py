@@ -160,7 +160,7 @@ def feed_updates():
     print("Received GET /feed_updates request.")
 
     # Extract the user UUID from the headers
-    user_uuid = request.headers.get("user-uuid")
+    user_uuid = request.headers.get("user-UUID")
     if not user_uuid:
         print("Missing user-uuid in request headers.")
         return jsonify({"error": "Missing user-uuid in headers."}), 400
