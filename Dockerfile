@@ -23,6 +23,7 @@ RUN pip install -r requirements.txt
 RUN pip install --upgrade openai
 RUN pip install --upgrade pinecone-client
 RUN pip install --upgrade chardet
+RUN pip install --upgrade poppler-utils
 # Step 5: copy the rest of your code
 COPY . /app/
 
@@ -30,4 +31,4 @@ COPY . /app/
 EXPOSE 5000
 
 # Step 7: run your Flask app (via gunicorn, for production)
-CMD ["gunicorn", "--bind=0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind=0.0.0.0:5000" , "app:app"]
