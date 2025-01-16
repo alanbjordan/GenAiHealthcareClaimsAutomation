@@ -32,6 +32,13 @@ document_bp = Blueprint('document_bp', __name__)
 
 @document_bp.route('/upload', methods=['POST'])
 def upload():
+    if request.method == 'OPTIONS':
+        response = jsonify({"message": "CORS preflight handled"})
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response, 200
     logging.info("Upload route was hit")
     print("Upload route was hit")  # Keeping print statements as requested
     
