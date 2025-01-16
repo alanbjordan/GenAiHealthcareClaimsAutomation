@@ -18,7 +18,7 @@ def get_conditions():
         print("Received CORS preflight request.")
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-UUID"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         print("CORS preflight response sent.")
@@ -150,7 +150,7 @@ def feed_updates():
         print("Received CORS preflight request for /feed_updates.")
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-UUID"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         print("CORS preflight response sent for /feed_updates.")
@@ -167,12 +167,23 @@ def feed_updates():
 
     print(f"Fetching feed updates for user UUID: {user_uuid}")
 
-    # Query active nexus tags specific to the user
+    # Get the user_id from the Users table
+    try:
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
+        if not user:
+            print(f"No user found with user_uuid: {user_uuid}")
+            return jsonify({"error": "Invalid user UUID"}), 404
+        user_id = user.user_id
+    except Exception as e:
+        print(f"Database query failed for Users: {e}")
+        return jsonify({"error": "Failed to retrieve user information."}), 500
+
+    # Query active nexus tags for the user
     try:
         active_nexus_tags = (
             g.session.query(NexusTags)
             .filter(NexusTags.revoked_at.is_(None))
-            .filter(NexusTags.user_uuid == user_uuid)  # Add user filtering
+            .filter(NexusTags.user_id == user_id)
             .all()
         )
     except Exception as e:
