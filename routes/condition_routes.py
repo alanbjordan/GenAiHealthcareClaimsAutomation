@@ -144,13 +144,6 @@ def get_conditions():
 
 @condition_bp.route("/feed_updates", methods=["GET", "OPTIONS"])
 def feed_updates():
-    """
-    Returns a list of active nexus tags along with 
-    all associated Conditions (including their fields).
-    This can be used in a front-end "Updates" or "Feed" section 
-    to highlight newly discovered nexus tags and the relevant 
-    in-service/current conditions that triggered them.
-    """
     start_time = time.time()
 
     if request.method == 'OPTIONS':
@@ -166,29 +159,31 @@ def feed_updates():
     
     print("Received GET /feed_updates request.")
 
-    # 1. Query all active nexus rows (revoked_at is still NULL)
-    active_nexus_tags_start = time.time()
+    # Extract the user UUID from the headers
+    user_uuid = request.headers.get("user-uuid")
+    if not user_uuid:
+        print("Missing user-uuid in request headers.")
+        return jsonify({"error": "Missing user-uuid in headers."}), 400
+
+    print(f"Fetching feed updates for user UUID: {user_uuid}")
+
+    # Query active nexus tags specific to the user
     try:
         active_nexus_tags = (
             g.session.query(NexusTags)
             .filter(NexusTags.revoked_at.is_(None))
+            .filter(NexusTags.user_uuid == user_uuid)  # Add user filtering
             .all()
         )
     except Exception as e:
         print(f"Database query failed for NexusTags: {e}")
         return jsonify({"error": "Failed to retrieve nexus tags."}), 500
-    query_time = time.time() - active_nexus_tags_start
-    print(f"Queried active nexus tags in {query_time:.4f} seconds. Found {len(active_nexus_tags)} records.")
 
     response_data = []
 
-    # 2. Build the response
-    build_response_start = time.time()
     for nexus in active_nexus_tags:
-        # "tag" is the Tag object (relationship from NexusTags to Tag)
         t = nexus.tag  # Assuming a relationship is defined in your SQLAlchemy model
 
-        # 3. Find all Conditions associated with this tag (via condition_tags)
         try:
             conditions = (
                 g.session.query(Conditions)
@@ -200,7 +195,6 @@ def feed_updates():
             print(f"Database query failed for Conditions: {e}")
             return jsonify({"error": "Failed to retrieve associated conditions."}), 500
 
-        # 4. Assemble the list of condition dictionaries
         condition_list = []
         for c in conditions:
             condition_list.append({
@@ -212,20 +206,15 @@ def feed_updates():
                 "findings": c.findings,
                 "comments": c.comments,
                 "in_service": c.in_service,
-                # Add more fields if needed
             })
 
-        # 5. Build the nexus-level entry
         response_data.append({
             "nexus_tags_id": nexus.nexus_tags_id,
             "tag_id": t.tag_id,
-            "disability_name": t.disability_name,  # e.g., "Knee Condition"
+            "disability_name": t.disability_name,
             "discovered_at": nexus.discovered_at.isoformat() if nexus.discovered_at else None,
             "conditions": condition_list,
         })
-
-    build_response_time = time.time() - build_response_start
-    print(f"Built response data in {build_response_time:.4f} seconds.")
 
     print(f"Total time for /feed_updates request: {time.time() - start_time:.4f} seconds.")
     return jsonify(response_data), 200
