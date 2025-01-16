@@ -18,7 +18,7 @@ def get_conditions():
         print("Received CORS preflight request.")
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-UUID"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         print("CORS preflight response sent.")

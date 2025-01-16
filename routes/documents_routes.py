@@ -35,7 +35,7 @@ def upload():
     if request.method == 'OPTIONS':
         response = jsonify({"message": "CORS preflight handled"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         return response, 200
