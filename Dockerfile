@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     libssl-dev \
     swig \
+    poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # Step 2: create and use working directory
@@ -23,7 +24,6 @@ RUN pip install -r requirements.txt
 RUN pip install --upgrade openai
 RUN pip install --upgrade pinecone-client
 RUN pip install --upgrade chardet
-RUN pip install --upgrade poppler-utils
 # Step 5: copy the rest of your code
 COPY . /app/
 
