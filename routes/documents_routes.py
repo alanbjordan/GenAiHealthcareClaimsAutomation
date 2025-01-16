@@ -276,7 +276,7 @@ def get_documents():
         print('CORS hit in documents')
         response = jsonify({"message": "CORS preflight successful"})
         response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
         response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         return response, 200
