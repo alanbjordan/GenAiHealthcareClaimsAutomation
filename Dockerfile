@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     swig \
     poppler-utils \
+    tesseract-ocr \
  && rm -rf /var/lib/apt/lists/*
 
 # Step 2: create and use working directory
