@@ -10,7 +10,7 @@ from sqlalchemy.orm import defer
 
 condition_bp = Blueprint('condition_bp', __name__)
 
-@condition_bp.route('/conditions', methods=['OPTIONS', 'GET'])
+@condition_bp.route('/conditions', methods=['OPTIONS', 'GET', 'POST', 'PUT', 'DELETE'])
 def get_conditions():
     start_time = time.time()  # Start timing the entire request
 
@@ -142,7 +142,7 @@ def get_conditions():
     return jsonify(response_data), 200
 
 
-@condition_bp.route("/feed_updates", methods=["GET", "OPTIONS"])
+@condition_bp.route("/feed_updates", methods=["GET", "OPTIONS", "POST", "PUT", "DELETE"])
 def feed_updates():
     start_time = time.time()
 

@@ -47,7 +47,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
         # Generate the embedding vector
         embedding_vector = generate_embedding(combined_text.strip())
         logging.info(f"Generated embedding for condition_id {condition_id}")
-        print(f"Generated embedding for condition_id {condition_id}")
+        logging.info(f"Generated embedding for condition_id {condition_id}")
 
         if embedding_vector is not None:
             # Create a new embedding instance
@@ -57,7 +57,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
             )
             session.add(new_embedding)
             logging.info(f"Stored embedding for condition_id {condition_id}")
-            print(f"Stored embedding for condition_id {condition_id}")
+            logging.info(f"Stored embedding for condition_id {condition_id}")
 
             # Perform similarity search to find top tags
             top_tags_with_distance = find_top_tags(session, embedding_vector, top_n=1)
@@ -70,7 +70,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
                         f"Associated tag {top_tag.tag_id} with condition_id {condition_id} "
                         f"(cosine distance: {distance:.4f})"
                     )
-                    print(
+                    logging.info(
                         f"Associated tag {top_tag.tag_id} with condition_id {condition_id} "
                         f"(cosine distance: {distance:.4f})"
                     )
@@ -80,7 +80,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
                         f"Condition_id {condition_id} marked as non-ratable "
                         f"(cosine distance: {distance:.4f} exceeds threshold)"
                     )
-                    print(
+                    logging.info(
                         f"Condition_id {condition_id} marked as non-ratable "
                         f"(cosine distance: {distance:.4f} exceeds threshold)"
                     )
@@ -89,7 +89,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
                 logging.info(
                     f"Condition_id {condition_id} marked as non-ratable (no tags found)"
                 )
-                print(
+                logging.info(
                     f"Condition_id {condition_id} marked as non-ratable (no tags found)"
                 )
         else:
@@ -97,13 +97,13 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
             logging.error(
                 f"Embedding vector is None for condition_id {condition_id}; marked as non-ratable"
             )
-            print(
+            logging.info(
                 f"Embedding vector is None for condition_id {condition_id}; marked as non-ratable"
             )
     except Exception as e:
         logging.error(
             f"Failed to generate or assign embedding for condition_id {condition_id}: {str(e)}"
         )
-        print(
+        logging.info(
             f"Failed to generate or assign embedding for condition_id {condition_id}: {str(e)}"
         )

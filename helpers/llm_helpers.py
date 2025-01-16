@@ -148,7 +148,7 @@ def classify_and_store_diagnosis(pages_text, prompt_text, model="gpt-4o"):
 
             # Store the classification result
             classified_results[page_number] = response.choices[0].message.content.strip()
-            print(f"Processed Page {page_number}: {classified_results[page_number]}")
+            logging.info(f"Processed Page {page_number}: {classified_results[page_number]}")
 
         except Exception as e:
             print(f"Error processing Page {page_number}: {e}")

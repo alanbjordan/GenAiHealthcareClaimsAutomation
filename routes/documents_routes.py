@@ -93,7 +93,7 @@ def upload():
             }
             file_type = file_type_mapping.get(file_extension, 'unknown')
             logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
-            print(f"Determined file type '{file_type}' for extension '{file_extension}'")
+            logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
 
             # Save to a temp file
             temp_file_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded_file.filename))
@@ -269,7 +269,7 @@ def extract_structured_data_from_file(file_path, file_type):
         logging.error(f"Error extracting structured data from file {file_path}: {str(e)}")
         return None
 
-@document_bp.route('/documents', methods=['OPTIONS', 'GET'])
+@document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
 def get_documents():
     if request.method == 'OPTIONS':
         # Handle the preflight request

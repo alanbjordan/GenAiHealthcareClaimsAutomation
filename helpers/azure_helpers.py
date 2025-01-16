@@ -16,7 +16,7 @@ account_name = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
 container_name = os.getenv("AZURE_CONTAINER_NAME")
 account_key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
 connection_string = os.getenv("AZURE_CONNECTION_STRING")
-print("AZURE_CONNECTION_STRING:", os.getenv("AZURE_CONNECTION_STRING"))
+logging.info("AZURE_CONNECTION_STRING:", os.getenv("AZURE_CONNECTION_STRING"))
 
 
 # Initialize BlobServiceClient using the connection string

@@ -36,7 +36,7 @@ def process_diagnosis(diagnosis, user_id, file_id, page_number, date_of_visit, m
         condition_id = new_condition.condition_id
 
         logging.info(f"Inserted new condition with ID {condition_id}")
-        print(f"Inserted new condition with ID {condition_id}")
+        logging.info(f"Inserted new condition with ID {condition_id}")
 
         return {
             "condition_name": condition_name,
