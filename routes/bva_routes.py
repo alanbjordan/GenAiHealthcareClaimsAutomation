@@ -19,9 +19,10 @@ def log_with_timing(prev_time, message):
     print(f"[{current_time.isoformat()}] {message} (Elapsed: {elapsed:.4f}s)")
     return current_time
 
-@bva_bp.route('/bva_search', methods=['GET', 'OPTIONS'])
+@bva_bp.route('/bva_search', methods=['GET'])
 def bva_search():
     t = log_with_timing(None, f"[bva_search] Called with method {request.method}")
+
 
     query = request.args.get('query')
     if not query:
@@ -99,9 +100,10 @@ def fetch_page(base_url, query, page, timing_prev):
         t = log_with_timing(t, f"[fetch_page][ERROR] Exception: {e}")
         return [], None, t
 
-@bva_bp.route('/bva_decision_text', methods=['GET', 'OPTIONS'])
+@bva_bp.route('/bva_decision_text', methods=['GET'])
 def bva_decision_text():
     t = log_with_timing(None, f"[bva_decision_text] Called with method {request.method}")
+
 
     url = request.args.get('url')
     if not url:
@@ -130,7 +132,7 @@ def bva_decision_text():
         t = log_with_timing(t, f"[bva_decision_text][GET][ERROR] Exception occurred while fetching full decision text from {url}: {e}")
         return jsonify({"error": "Unable to retrieve decision text"}), 500
 
-@bva_bp.route('/bva_support', methods=['GET', 'OPTIONS'])
+@bva_bp.route('/bva_support', methods=['GET'])
 def bva_support():
     t = log_with_timing(None, f"[bva_support] Called with method {request.method}")
 
@@ -144,9 +146,10 @@ def bva_support():
         "message": f"Below are the top 5 Board of Veterans’ Appeals (BVA) decisions that closely match the veteran’s condition {condition_tag}."
     }), 200
 
-@bva_bp.route('/bva_decision_text_proxy', methods=['GET', 'OPTIONS'])
+@bva_bp.route('/bva_decision_text_proxy', methods=['GET'])
 def bva_decision_text_proxy():
     t = log_with_timing(None, f"[bva_decision_text_proxy] Called with method {request.method}")
+
 
     url = request.args.get('url')
     if not url:

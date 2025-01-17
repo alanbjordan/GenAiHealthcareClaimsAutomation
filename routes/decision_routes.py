@@ -54,7 +54,7 @@ def get_user_uuid_from_request(request):
     return user_uuid, None
 
 
-@decision_bp.route('/user_decision_save', methods=['GET', 'POST', 'OPTIONS'])
+@decision_bp.route('/user_decision_save', methods=['GET', 'POST'])
 def user_decision_save():
     t = log_with_timing(None, f"[user_decision_save] Route called with method {request.method}")
 
@@ -140,9 +140,7 @@ def user_decision_save():
         t = log_with_timing(t, "[user_decision_save][POST] Notes, URL, and summary saved/updated successfully.")
         return jsonify({"message": "Notes, URL, and summary saved successfully"}), 200
 
-
-
-@decision_bp.route('/structured_summarize_bva_decision', methods=['POST', 'OPTIONS'])
+@decision_bp.route('/structured_summarize_bva_decision', methods=['POST'])
 def structured_summarize_bva_decision():
     t = log_with_timing(None, f"[structured_summarize_bva_decision] Route called with method {request.method}")
 
@@ -179,7 +177,7 @@ def structured_summarize_bva_decision():
     t = log_with_timing(t, "[structured_summarize_bva_decision] Returning structured_data.")
     return jsonify(structured_data), 200
 
-@decision_bp.route('/user_decisions', methods=['GET', 'OPTIONS'])
+@decision_bp.route('/user_decisions', methods=['GET'])
 def get_all_user_decisions():
     t = log_with_timing(None, f"[get_all_user_decisions] Route called with method {request.method}")
 
