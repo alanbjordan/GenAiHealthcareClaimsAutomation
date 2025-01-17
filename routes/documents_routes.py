@@ -93,7 +93,7 @@ def upload():
             }
             file_type = file_type_mapping.get(file_extension, 'unknown')
             logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
-            logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
+            print(f"Determined file type '{file_type}' for extension '{file_extension}'")
 
             # Save to a temp file
             temp_file_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded_file.filename))
