@@ -25,14 +25,15 @@ from helpers.diagnosis_processor import process_diagnosis
 from helpers.diagnosis_list import process_diagnosis_list
 from helpers.sql_helpers import *
 from helpers.cors_helpers import cors_preflight
+from helpers.upload.validation_helper import validate_and_setup_request
+from helpers.upload.usr_svcp_helpers import get_user_and_service_periods
 
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
 
 # ========== DOCUMENT CRUD ROUTES ==========
 
-@document_bp.route('/upload', methods=['POST', 'OPTIONS'])
-@cors_preflight
+@document_bp.route('/upload', methods=['POST'])
 def upload():
     logging.info("Upload route was hit")
     print("Upload route was hit")  # Keeping print statements as requested
@@ -40,32 +41,18 @@ def upload():
     try:
         process_start_time = time.time()
 
-        if 'file' not in request.files:
-            logging.error("No file part in the request")
-            print("No file part in the request")
-            return jsonify({"error": "No file part"}), 400
+        # Validate the request and extract data
+        validation_result, error_response = validate_and_setup_request(request)
+        if error_response:
+            return validation_result  # Early exit if validation fails
 
-        uploaded_files = request.files.getlist('file')
-        user_uuid = request.form.get('userUUID')  # Get user UUID from request
+        user_uuid, uploaded_files = validation_result
 
-        if not user_uuid:
-            logging.error("User UUID is missing in the request")
-            print("User UUID is missing in the request")
-            return jsonify({"error": "User UUID is required"}), 400
-
-        # Lookup the user by UUID
-        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
-        if not user:
-            logging.error(f"Invalid user UUID: {user_uuid}")
-            print(f"Invalid user UUID: {user_uuid}")
-            return jsonify({"error": "Invalid user UUID"}), 404
-
-        # Retrieve service periods if needed
-        service_periods = g.session.query(ServicePeriod).filter_by(user_id=user.user_id).all()
-        if not service_periods:
-            logging.warning(f'No service periods found for user {user_uuid}')
-            print(f'No service periods found for user {user_uuid}')
-            # Not mandatory to have service periods
+        # Step 2: Retrieve user and service periods
+        user_lookup_result, error_response = get_user_and_service_periods(user_uuid)
+        if error_response:
+            return user_lookup_result  # Early exit if user lookup fails
+        user, service_periods = user_lookup_result
 
         uploaded_urls = []
 
