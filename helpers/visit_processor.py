@@ -30,7 +30,7 @@ def process_visit(visit, page_number, service_periods, user_id, file_id):
     medical_professionals = visit.get('medical_professionals', [])
 
     logging.info(f"Processing visit on {date_of_visit} with {len(diagnosis_list)} diagnoses")
-    print-(f"Processing visit on {date_of_visit} with {len(diagnosis_list)} diagnoses")
+    print(f"Processing visit on {date_of_visit} with {len(diagnosis_list)} diagnoses")
 
     # Convert medical_professionals list to a comma-separated string
     medical_professionals_str = ', '.join(medical_professionals) if medical_professionals else None
