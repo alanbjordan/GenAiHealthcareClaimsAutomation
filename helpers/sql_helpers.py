@@ -67,6 +67,7 @@ def revoke_nexus_tags_if_invalid(session, user_id):
             func.count(case((Conditions.in_service == False, 1), else_=None)) > 0
         )
         .subquery()
+        .select()  # Explicitly call select() on the subquery
     )
 
     to_revoke = (

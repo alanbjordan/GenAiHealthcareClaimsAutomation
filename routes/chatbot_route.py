@@ -8,7 +8,7 @@ from helpers.cors_helpers import cors_preflight
 
 chatbot_bp = Blueprint("chatbot_bp", __name__)
 
-@chatbot_bp.route("/chat", methods=["POST", "OPTIONS"])
+@chatbot_bp.route("/chat", methods=["POST"])
 def chat():
     """
     Handle a single user message and get a single assistant response, 
