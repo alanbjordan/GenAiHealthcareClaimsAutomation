@@ -76,16 +76,6 @@ def save_service_dates():
     Each service period contains a start date, end date, and branch of service.
     """
 
-    if request.method == 'OPTIONS':
-        print("Received CORS preflight request.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
-        response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        print("CORS preflight response sent.")
-        return response, 200
-
     try:
         # Extract data from the request body
         data = request.get_json()

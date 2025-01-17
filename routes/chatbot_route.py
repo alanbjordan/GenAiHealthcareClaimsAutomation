@@ -4,6 +4,7 @@ from config import Config
 from helpers.chatbot_helper import continue_conversation
 from models.sql_models import Users, ServicePeriod
 import traceback
+from helpers.cors_helpers import cors_preflight
 
 chatbot_bp = Blueprint("chatbot_bp", __name__)
 
@@ -25,18 +26,6 @@ def chat():
         "thread_id": "..."
     }
     """
-
-    # 1) Handle CORS Preflight
-    if request.method == 'OPTIONS':
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers.update({
-            "Access-Control-Allow-Origin": Config.CORS_ORIGINS,
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, user-uuid",
-            "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Credentials": "true"
-        })
-        return response, 200
-
     try:
         # 2) Parse JSON request body
         data = request.get_json(force=True)
