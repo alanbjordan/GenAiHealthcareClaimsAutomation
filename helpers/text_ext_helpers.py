@@ -39,6 +39,7 @@ def read_and_extract_document(file_input: Union[str, BytesIO], file_type: str) -
     """
     # Validate and read the file input
     if isinstance(file_input, (str, os.PathLike)):
+        print("File Input is a string")
         # Validate file existence if input is a file path
         if not os.path.exists(file_input):
             logger.error(f"The file at path {file_input} does not exist.")
@@ -47,6 +48,7 @@ def read_and_extract_document(file_input: Union[str, BytesIO], file_type: str) -
         # Read the file as bytes
         try:
             with open(file_input, 'rb') as file:
+                print("Reading file as bytes")
                 file_bytes = file.read()
         except IOError as io_err:
             logger.error(f"Failed to read file at {file_input}: {io_err}")
@@ -54,21 +56,26 @@ def read_and_extract_document(file_input: Union[str, BytesIO], file_type: str) -
 
     elif isinstance(file_input, BytesIO):
         # If input is an in-memory file, read its contents directly
+        print("File Input is a BytesIO object")
         file_bytes = file_input.getvalue()
     else:
+        print("Unsupported input type")
         logger.error("file_input must be a file path or a BytesIO object.")
         raise TypeError("Unsupported input type: file_input must be str or BytesIO.")
 
     # Process the document to extract text
     try:
+        print("Processing document for text extraction")
         extracted_text = process_document(file_bytes, file_type)
         logger.info("Document processed and text extracted.")
+        print("Document processed and text extracted.")
     except Exception as e:
         logger.error(f"Error processing document for text extraction: {e}")
         raise RuntimeError(f"Error during document processing: {e}")
 
     # Process all pages at once
     try:
+        print("Processing pages")
         document_outputs = process_pages(extracted_text)
     except Exception as e:
         logger.error(f"Failed to process pages: {e}")
@@ -114,8 +121,10 @@ def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
     """
     try:
         logger.info("Converting PDF bytes to images.")
+        print("Converting PDF bytes to images.")
         images = convert_from_bytes(pdf_bytes)
         logger.info(f"Converted PDF to {len(images)} images.")
+        print(f"Converted PDF to {len(images)} images.")
     except Exception as e:
         logger.error(f"Error converting PDF to images: {e}")
         raise RuntimeError("Failed to convert PDF to images.") from e
@@ -125,6 +134,7 @@ def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
     max_workers = min(32, len(images))  # Adjust based on your environment
 
     logger.info(f"Starting OCR with {max_workers} worker processes.")
+    print(f"Starting OCR with {max_workers} worker processes.")
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Submit all OCR tasks to the pool
         future_to_page = {executor.submit(ocr_image, pair): pair[0] for pair in page_num_image_tuples}
@@ -146,6 +156,7 @@ def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
     text_content_sorted = sorted(text_content, key=extract_page_num)
     
     logger.info("Completed OCR for all pages.")
+    print("Completed OCR for all pages.")
     return text_content_sorted
 
 def process_image_bytes(image_bytes: bytes) -> str:
@@ -174,6 +185,7 @@ def process_pages(page_contents: List[str]) -> List[Dict]:
         # ====================================================
         document_type_infos = detect_document_types(page_contents)
         logger.info(f"Document types extracted for {len(page_contents)} pages")
+        print(f"Document types extracted for {len(page_contents)} pages")
 
         # Create a mapping from page number to (content, classification)
         page_info = {
@@ -228,10 +240,12 @@ def process_single_page(page_num: int, page_content: str, classification: PageCl
     try:
         page_document_type = classification.category
         logger.info(f"Processing page {page_num} with document type {page_document_type}")
+        print(f"Processing page {page_num} with document type {page_document_type}")
 
         # Extract structured information based on document type
         structured_info = process_document_based_on_type(page_content, page_document_type)
         logger.info(f"Information extracted from page {page_num}")
+        print(f"Information extracted from page {page_num}")
 
         return {
             'page': page_num,
@@ -272,6 +286,7 @@ def extract_page_num(text: str) -> int:
         return int(match.group(1))
     else:
         logger.warning(f"Unable to extract page number from text: {text[:30]}...")
+        print(f"Unable to extract page number from text: {text[:30]}...")
         return 0  # Assign a default or handle as needed
 
 def ocr_image(page_num_image_tuple):
@@ -287,8 +302,10 @@ def ocr_image(page_num_image_tuple):
     page_num, image = page_num_image_tuple
     try:
         logger.debug(f"Starting OCR for page {page_num}")
+        print(f"Starting OCR for page {page_num}")
         text = pytesseract.image_to_string(image)
         logger.debug(f"Completed OCR for page {page_num}")
+        print(f"Completed OCR for page {page_num}")
         return f"Page {page_num}:\n{text}"
     except Exception as e:
         logger.error(f"Error during OCR on page {page_num}: {e}")
@@ -322,12 +339,14 @@ def process_page(pagenum: int, page_content: str) -> Dict:
         document_type_info = detect_document_type(page_content)
         page_document_type = document_type_info.category
         logger.info(f"Document type extracted from page {pagenum + 1}")
+        print(f"Document type extracted from page {pagenum + 1}")
 
         # ====================================================
         # Section: Extract Structure Information
         # ====================================================
         structured_info = process_document_based_on_type(page_content, page_document_type)
         logger.info(f"Information extracted from page {pagenum + 1}")
+        print(f"Information extracted from page {pagenum + 1}")
 
         result = {
             'page': pagenum + 1,
