@@ -23,15 +23,6 @@ def log_with_timing(prev_time, message):
 def bva_search():
     t = log_with_timing(None, f"[bva_search] Called with method {request.method}")
 
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[bva_search][OPTIONS] Handling CORS preflight.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        t = log_with_timing(t, "[bva_search][OPTIONS] Returning response.")
-        return response, 200
-
     query = request.args.get('query')
     if not query:
         t = log_with_timing(t, "[bva_search][GET] Missing 'query' parameter.")
@@ -112,15 +103,6 @@ def fetch_page(base_url, query, page, timing_prev):
 def bva_decision_text():
     t = log_with_timing(None, f"[bva_decision_text] Called with method {request.method}")
 
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[bva_decision_text][OPTIONS] Handling CORS preflight.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        t = log_with_timing(t, "[bva_decision_text][OPTIONS] Returning response.")
-        return response, 200
-
     url = request.args.get('url')
     if not url:
         t = log_with_timing(t, "[bva_decision_text][GET][ERROR] Missing 'url' parameter.")
@@ -152,15 +134,6 @@ def bva_decision_text():
 def bva_support():
     t = log_with_timing(None, f"[bva_support] Called with method {request.method}")
 
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[bva_support][OPTIONS] Handling CORS preflight.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        t = log_with_timing(t, "[bva_support][OPTIONS] Returning response.")
-        return response, 200
-
     condition_tag = request.args.get('query')
     if not condition_tag:
         return jsonify({"error": "Missing 'query' parameter"}), 400
@@ -174,15 +147,6 @@ def bva_support():
 @bva_bp.route('/bva_decision_text_proxy', methods=['GET', 'OPTIONS'])
 def bva_decision_text_proxy():
     t = log_with_timing(None, f"[bva_decision_text_proxy] Called with method {request.method}")
-    
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[bva_decision_text_proxy][OPTIONS] Handling CORS preflight.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        t = log_with_timing(t, "[bva_decision_text_proxy][OPTIONS] Returning response.")
-        return response, 200
 
     url = request.args.get('url')
     if not url:

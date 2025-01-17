@@ -1,11 +1,11 @@
 # helpers/azure_helpers.py
 import os
-import logging
-from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas, BlobSasPermissions, BlobClient
-from datetime import datetime, timedelta
-import mimetypes
 import time
 import logging
+import mimetypes
+from io import BytesIO
+from datetime import datetime, timedelta
+from azure.storage.blob import BlobServiceClient, ContentSettings, generate_blob_sas, BlobSasPermissions, BlobClient
 
 # ============        AZURE BLOB STORAGE SETUP        ============
 # =============================================
@@ -17,7 +17,6 @@ container_name = os.getenv("AZURE_CONTAINER_NAME")
 account_key = os.getenv("AZURE_STORAGE_ACCOUNT_KEY")
 connection_string = os.getenv("AZURE_CONNECTION_STRING")
 logging.info("AZURE_CONNECTION_STRING:", os.getenv("AZURE_CONNECTION_STRING"))
-
 
 # Initialize BlobServiceClient using the connection string
 blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_CONNECTION_STRING"))
@@ -47,6 +46,7 @@ def download_file_from_azure(blob_url):
         downloader = blob_client.download_blob()
         file_content = downloader.readall()
         logging.info(f"File '{blob_name}' successfully downloaded from Azure Blob Storage.")
+        print(f"File '{blob_name}' successfully downloaded from Azure Blob Storage.")
         return file_content
     except Exception as e:
         logging.error(f"Error downloading file '{blob_url}' from Azure: {e}")
@@ -100,6 +100,7 @@ def upload_file_to_azure(file_path, blob_name):
 
         blob_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
         logging.info(f"File '{file_path}' successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
+        print(f"File '{file_path}' successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
 
         return blob_url
     except Exception as e:
@@ -129,19 +130,14 @@ def upload_in_memory_file_to_azure(file_data, blob_name, content_type=None):
 
         blob_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
         logging.info(f"In-memory file successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
+        print(f"In-memory file successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
 
         return blob_url
     except Exception as e:
         logging.error(f"Error uploading in-memory file to Azure: {e}")
         return None
     
-import os
-import logging
-import mimetypes
-from azure.storage.blob import ContentSettings, BlobServiceClient
-from azure.storage.blob import generate_blob_sas, BlobSasPermissions
-from datetime import datetime, timedelta
-from io import BytesIO
+
 
 # Initialize BlobServiceClient once, globally or within a setup function
 blob_service_client = BlobServiceClient(
@@ -208,6 +204,7 @@ def upload_to_azure_blob(blob_name, file_path=None, file_data=None, content_type
 
         blob_url = f"https://{account_name}.blob.core.windows.net/{container_name}/{blob_name}"
         logging.info(f"File successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
+        print(f"File successfully uploaded to blob '{blob_name}'. Blob URL: {blob_url}")
 
         return blob_url
 

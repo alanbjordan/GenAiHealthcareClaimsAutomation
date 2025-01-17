@@ -10,20 +10,9 @@ from sqlalchemy.orm import defer
 
 condition_bp = Blueprint('condition_bp', __name__)
 
-@condition_bp.route('/conditions', methods=['OPTIONS', 'GET', 'POST', 'PUT', 'DELETE'])
+@condition_bp.route('/conditions', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def get_conditions():
     start_time = time.time()  # Start timing the entire request
-
-    if request.method == 'OPTIONS':
-        print("Received CORS preflight request.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
-        response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        print("CORS preflight response sent.")
-        print(f"Total time for OPTIONS request: {time.time() - start_time:.4f} seconds.")
-        return response, 200
 
     user_uuid = request.args.get('userUUID')
     print(f"Received GET /conditions request with userUUID: {user_uuid}")
@@ -142,20 +131,9 @@ def get_conditions():
     return jsonify(response_data), 200
 
 
-@condition_bp.route("/feed_updates", methods=["GET", "OPTIONS", "POST", "PUT", "DELETE"])
+@condition_bp.route("/feed_updates", methods=["GET", "POST", "PUT", "DELETE"])
 def feed_updates():
     start_time = time.time()
-
-    if request.method == 'OPTIONS':
-        print("Received CORS preflight request for /feed_updates.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
-        response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        print("CORS preflight response sent for /feed_updates.")
-        print(f"Total time for OPTIONS request: {time.time() - start_time:.4f} seconds.")
-        return response, 200
     
     print("Received GET /feed_updates request.")
 

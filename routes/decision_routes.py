@@ -58,16 +58,6 @@ def get_user_uuid_from_request(request):
 def user_decision_save():
     t = log_with_timing(None, f"[user_decision_save] Route called with method {request.method}")
 
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[user_decision_save] Handling OPTIONS request.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        t = log_with_timing(t, "[user_decision_save] Returning OPTIONS response.")
-        return response, 200
-
     user_uuid, error = get_user_uuid_from_request(request)
     if error:
         t = log_with_timing(t, f"[user_decision_save][WARNING] Missing user_uuid: {error}")
@@ -156,16 +146,6 @@ def user_decision_save():
 def structured_summarize_bva_decision():
     t = log_with_timing(None, f"[structured_summarize_bva_decision] Route called with method {request.method}")
 
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[structured_summarize_bva_decision] Handling OPTIONS request.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        t = log_with_timing(t, "[structured_summarize_bva_decision] Returning OPTIONS response.")
-        return response, 200
-
     ### CHANGED: Again, we use the new helper
     user_uuid, error = get_user_uuid_from_request(request)
     if error:
@@ -202,16 +182,6 @@ def structured_summarize_bva_decision():
 @decision_bp.route('/user_decisions', methods=['GET', 'OPTIONS'])
 def get_all_user_decisions():
     t = log_with_timing(None, f"[get_all_user_decisions] Route called with method {request.method}")
-
-    if request.method == 'OPTIONS':
-        t = log_with_timing(t, "[get_all_user_decisions] Handling OPTIONS request.")
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        t = log_with_timing(t, "[get_all_user_decisions] Returning OPTIONS response.")
-        return response, 200
 
     # Extract user UUID from request headers
     user_uuid, error = get_user_uuid_from_request(request)

@@ -252,7 +252,6 @@ def extract_structured_data_from_file(file_path, file_type):
         return None
 
 @document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
-@cors_preflight
 def get_documents():
 
     # GET request logic
@@ -279,7 +278,6 @@ def get_documents():
     return jsonify(document_list), 200
 
 @document_bp.route('/documents/delete/<int:file_id>', methods=['DELETE', 'OPTIONS'])
-@cors_preflight
 def delete_document(file_id):
     # 1) Grab the userUUID from the query param (e.g. ?userUUID=xxx)
     user_uuid = request.args.get('userUUID', None)
@@ -332,7 +330,6 @@ def extract_blob_name(blob_url):
 
 
 @document_bp.route('/documents/rename/<int:file_id>', methods=['PUT', 'OPTIONS'])
-@cors_preflight
 def rename_document(file_id):
     data = request.get_json()
     new_name = data.get('new_name')
@@ -397,7 +394,6 @@ def rename_document(file_id):
 
 
 @document_bp.route('/documents/change-category/<int:file_id>', methods=['PUT', 'OPTIONS'])
-@cors_preflight
 def change_document_category(file_id):
     # Extract the data from the request
     data = request.get_json()
@@ -458,7 +454,6 @@ def change_document_category(file_id):
         return jsonify({"error": f"Failed to change category: {str(e)}"}), 500
 
 @document_bp.route('/documents/download/<int:file_id>', methods=['GET', 'OPTIONS'])
-@cors_preflight
 def download_document(file_id):
     try:
         # Fetch the file from the database
@@ -474,7 +469,6 @@ def download_document(file_id):
         return jsonify({"error": f"Failed to get download URL: {str(e)}"}), 500
 
 @document_bp.route('/documents/preview/<int:file_id>', methods=['GET', 'OPTIONS'])
-@cors_preflight
 def preview_document(file_id):
     
     try:
@@ -516,7 +510,6 @@ def preview_document(file_id):
         return jsonify({"error": f"Failed to generate preview URL: {str(e)}"}), 500
 
 @document_bp.route('/upload-file', methods=['POST', 'OPTIONS'])
-@cors_preflight
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
@@ -549,7 +542,6 @@ def upload_file():
         return jsonify({"error": "Failed to upload file"}), 500
 
 @document_bp.route('/get-file-url/<blob_name>', methods=['GET', 'OPTIONS'])
-@cors_preflight
 def get_file_url(blob_name):
     try:
         # Generate the SAS URL using the helper function

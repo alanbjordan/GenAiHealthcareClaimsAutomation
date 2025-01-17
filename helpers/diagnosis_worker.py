@@ -30,7 +30,8 @@ def worker_process_diagnosis(diagnosis, user_id, file_id, page_number, date_of_v
 
             logging.debug(f"Combined text for embedding: {combined_text.strip()}")
             logging.info(f"Combined text for embedding: {combined_text.strip()}")
-
+            print(f"Combined text for embedding: {combined_text.strip()}")
+            
             try:
                 process_condition_embedding(condition_id, combined_text, new_condition, session)
             except Exception as e:
