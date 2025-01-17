@@ -10,11 +10,13 @@ import os
 import jwt
 import uuid
 import logging
+from helpers.cors_helpers import pre_authorized_cors_preflight
 
 auth_bp = Blueprint('auth_bp', __name__)
 
 # ----- Sign-up Endpoint -----
-@auth_bp.route('/signup', methods=['POST'])
+@auth_bp.route('/signup', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def signup():
     data = request.get_json()
     logging.debug('Received signup request with data: %s', data)
@@ -81,8 +83,6 @@ def signup():
         logging.error('Failed to create user with email %s: %s', email, str(e))
         return jsonify({"error": f"Failed to create user: {str(e)}"}), 500
 
-
-
 # Utility function to create JWT payload
 def create_jwt_token(user_uuid, email, expires_in_hours=1):
     """
@@ -99,7 +99,6 @@ def create_jwt_token(user_uuid, email, expires_in_hours=1):
     }
     return jwt.encode(payload, Config.SECRET_KEY, algorithm='HS256')
 
-
 def decode_jwt_no_verify(token_str):
     """
     Decodes a JWT *without* verifying the signature, so we can read 'exp' if needed.
@@ -107,9 +106,9 @@ def decode_jwt_no_verify(token_str):
     """
     return jwt.decode(token_str, options={"verify_signature": False, "verify_exp": False})
 
-
 # ----- Login Endpoint -----
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def login():
     data = request.get_json()
     logging.debug('Received login request with data: %s', data)
@@ -160,7 +159,8 @@ def login():
 
 
 # ----- Google Login Endpoint -----
-@auth_bp.route('/google-login', methods=['POST'])
+@auth_bp.route('/google-login', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def google_login():
     logging.debug('google/login backend hit')
     data = request.get_json()
@@ -249,7 +249,8 @@ def google_login():
 
 
 # ----- Refresh Token Endpoint -----
-@auth_bp.route('/refresh', methods=['POST'])
+@auth_bp.route('/refresh', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def refresh():
     """
     Expects JSON body: { "refresh_token": "<the long-lived token>" }

@@ -24,21 +24,16 @@ from helpers.diagnosis_worker import worker_process_diagnosis
 from helpers.diagnosis_processor import process_diagnosis
 from helpers.diagnosis_list import process_diagnosis_list
 from helpers.sql_helpers import *
+from helpers.cors_helpers import cors_preflight
 
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
 
 # ========== DOCUMENT CRUD ROUTES ==========
 
-@document_bp.route('/upload', methods=['POST'])
+@document_bp.route('/upload', methods=['POST', 'OPTIONS'])
+@cors_preflight
 def upload():
-    if request.method == 'OPTIONS':
-        response = jsonify({"message": "CORS preflight handled"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response, 200
     logging.info("Upload route was hit")
     print("Upload route was hit")  # Keeping print statements as requested
     
@@ -270,16 +265,8 @@ def extract_structured_data_from_file(file_path, file_type):
         return None
 
 @document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
+@cors_preflight
 def get_documents():
-    if request.method == 'OPTIONS':
-        # Handle the preflight request
-        print('CORS hit in documents')
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers["Access-Control-Allow-Origin"] = Config.CORS_ORIGINS
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, userUUID"
-        response.headers["Access-Control-Allow-Methods"] = "GET, PUT, POST, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response, 200
 
     # GET request logic
     user_uuid = request.args.get('userUUID')
@@ -304,17 +291,9 @@ def get_documents():
 
     return jsonify(document_list), 200
 
-
 @document_bp.route('/documents/delete/<int:file_id>', methods=['DELETE', 'OPTIONS'])
+@cors_preflight
 def delete_document(file_id):
-    if request.method == 'OPTIONS':
-        response = jsonify({"message": "CORS preflight handled"})
-        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, user-uuid"
-        response.headers["Access-Control-Allow-Methods"] = "DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        return response, 200
-
     # 1) Grab the userUUID from the query param (e.g. ?userUUID=xxx)
     user_uuid = request.args.get('userUUID', None)
     if not user_uuid:
@@ -365,7 +344,8 @@ def extract_blob_name(blob_url):
     return "/".join(blob_url.split("/")[4:])  # Gets the blob name from the full URL
 
 
-@document_bp.route('/documents/rename/<int:file_id>', methods=['PUT'])
+@document_bp.route('/documents/rename/<int:file_id>', methods=['PUT', 'OPTIONS'])
+@cors_preflight
 def rename_document(file_id):
     data = request.get_json()
     new_name = data.get('new_name')
@@ -429,7 +409,8 @@ def rename_document(file_id):
         return jsonify({"error": f"Failed to rename file: {str(e)}"}), 500
 
 
-@document_bp.route('/documents/change-category/<int:file_id>', methods=['PUT'])
+@document_bp.route('/documents/change-category/<int:file_id>', methods=['PUT', 'OPTIONS'])
+@cors_preflight
 def change_document_category(file_id):
     # Extract the data from the request
     data = request.get_json()
@@ -489,7 +470,8 @@ def change_document_category(file_id):
         logging.error(f"Failed to change category for file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to change category: {str(e)}"}), 500
 
-@document_bp.route('/documents/download/<int:file_id>', methods=['GET'])
+@document_bp.route('/documents/download/<int:file_id>', methods=['GET', 'OPTIONS'])
+@cors_preflight
 def download_document(file_id):
     try:
         # Fetch the file from the database
@@ -504,8 +486,10 @@ def download_document(file_id):
         logging.error(f"Failed to get download URL for file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to get download URL: {str(e)}"}), 500
 
-@document_bp.route('/documents/preview/<int:file_id>', methods=['GET'])
+@document_bp.route('/documents/preview/<int:file_id>', methods=['GET', 'OPTIONS'])
+@cors_preflight
 def preview_document(file_id):
+    
     try:
         # Fetch the file from the database
         file = g.session.query(File).filter_by(file_id=file_id).first()
@@ -544,7 +528,8 @@ def preview_document(file_id):
         logging.error(f"Failed to generate preview URL for file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to generate preview URL: {str(e)}"}), 500
 
-@document_bp.route('/upload-file', methods=['POST'])
+@document_bp.route('/upload-file', methods=['POST', 'OPTIONS'])
+@cors_preflight
 def upload_file():
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
@@ -576,7 +561,8 @@ def upload_file():
     else:
         return jsonify({"error": "Failed to upload file"}), 500
 
-@document_bp.route('/get-file-url/<blob_name>', methods=['GET'])
+@document_bp.route('/get-file-url/<blob_name>', methods=['GET', 'OPTIONS'])
+@cors_preflight
 def get_file_url(blob_name):
     try:
         # Generate the SAS URL using the helper function
