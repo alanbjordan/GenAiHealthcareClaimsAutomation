@@ -39,9 +39,10 @@ def process_visit(visit, page_number, service_periods, user_id, file_id):
 
     # Determine if the visit date falls within any service period
     in_service = any(
-        period.service_start_date <= date_of_visit_dt <= period.service_end_date
+        period['service_start_date'] <= date_of_visit_dt <= period['service_end_date']
         for period in service_periods
-    )
+    )   
+
     logging.debug(f"Visit date {date_of_visit_dt} in service period: {in_service}")
     logging.info(f"Visit date {date_of_visit_dt} in service period: {in_service}")
     print(f"Visit date {date_of_visit_dt} in service period: {in_service}")

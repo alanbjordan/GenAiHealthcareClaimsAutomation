@@ -28,34 +28,58 @@ from helpers.cors_helpers import cors_preflight
 from helpers.upload.validation_helper import validate_and_setup_request
 from helpers.upload.usr_svcp_helpers import get_user_and_service_periods
 
+
+# Celery task imports
+from flask import Blueprint, request, jsonify, g
+from models.sql_models import *  # Import File and Users models
+import os
+import tempfile
+import json
+from werkzeug.utils import secure_filename
+from datetime import datetime
+import time
+import logging
+
+from azure.storage.blob import BlobServiceClient
+from helpers.azure_helpers import upload_file_to_azure
+from config import Config
+from helpers.upload.validation_helper import validate_and_setup_request
+from helpers.upload.usr_svcp_helpers import get_user_and_service_periods
+from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
+
+# Import your Celery tasks
+from celery_app import extraction_task, process_pages_task, finalize_task
+
+
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
 
 # ========== DOCUMENT CRUD ROUTES ==========
-
 @document_bp.route('/upload', methods=['POST'])
 def upload():
     logging.info("Upload route was hit")
     print("Upload route was hit")  # Keeping print statements as requested
-    
+
     try:
         process_start_time = time.time()
 
-        # Validate the request and extract data
+        # 1. Validate the request and extract data
         validation_result, error_response = validate_and_setup_request(request)
         if error_response:
             return validation_result  # Early exit if validation fails
 
         user_uuid, uploaded_files = validation_result
 
-        # Step 2: Retrieve user and service periods
+        # 2. Retrieve user and service periods
         user_lookup_result, error_response = get_user_and_service_periods(user_uuid)
         if error_response:
             return user_lookup_result  # Early exit if user lookup fails
         user, service_periods = user_lookup_result
 
+        # This will store info about each file we process
         uploaded_urls = []
 
+        # Process each uploaded file
         for uploaded_file in uploaded_files:
             if uploaded_file.filename == '':
                 logging.error("No selected file in the upload")
@@ -77,150 +101,95 @@ def upload():
             logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
             print(f"Determined file type '{file_type}' for extension '{file_extension}'")
 
-            # Save to a temp file
+            # Save to a local temp file
             temp_file_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded_file.filename))
             uploaded_file.save(temp_file_path)
             logging.info(f"Saved uploaded file to temporary path: {temp_file_path}")
             print(f"Saved uploaded file to temporary path: {temp_file_path}")
 
-            # Extract details from the file
-            details = read_and_extract_document(temp_file_path, file_type)
-            if not details:
-                logging.error(f"Failed to extract details from file: {uploaded_file.filename}")
-                print(f"Failed to extract details from file: {uploaded_file.filename}")
-                uploaded_urls.append({
-                    'category': 'Unclassified',
-                    "fileName": uploaded_file.filename,
-                    "blobUrl": None,
-                    "error": "Failed to extract document details"
-                })
-                continue
-
-            # Attempt to parse extracted data as JSON
-            try:
-                details = json.loads(details)
-            except json.JSONDecodeError as e:
-                logging.error(f"JSON decoding failed for file {uploaded_file.filename}: {str(e)}")
-                print(f"JSON decoding failed for file {uploaded_file.filename}: {str(e)}")
-                uploaded_urls.append({
-                    'category': 'Unclassified',
-                    "fileName": uploaded_file.filename,
-                    "blobUrl": None,
-                    "error": "Failed to parse document details"
-                })
-                continue
-
-            # Determine category (your logic may differ)
+            # For demonstration, assume your app’s logic sets `category` to “Unclassified”.
+            # Adjust as needed to match your real category-determination logic.
             category = 'Unclassified'
+
+            # 3. Upload file to Azure
             blob_name = f"{user_uuid}/{category}/{uploaded_file.filename}"
-            
-            # Upload file to Azure
             blob_url = upload_file_to_azure(temp_file_path, blob_name)
             logging.info(f"Uploaded file to Azure Blob Storage: {blob_url}")
             print(f"Uploaded file to Azure Blob Storage: {blob_url}")
 
-            if blob_url:
-                # Create a File record
-                new_file = File(
-                    user_id=user.user_id,
-                    file_name=uploaded_file.filename,
-                    file_type=file_type,
-                    file_url=blob_url,
-                    file_date=datetime.now().date(),
-                    uploaded_at=datetime.utcnow(),
-                    file_size=os.path.getsize(temp_file_path),
-                    file_category=category,
-                )
-                g.session.add(new_file)
-                g.session.flush()  # get new_file.file_id
-                file_id = new_file.file_id
-                g.session.commit()
-                
-                logging.info(f"Inserted new file record with file_id={file_id}")
-                print(f"Inserted new file record with file_id={file_id}")
+            # 4. Create a File record in the DB (status = "Processing" if you want)
+            new_file = File(
+                user_id=user.user_id,
+                file_name=uploaded_file.filename,
+                file_type=file_type,
+                file_url=blob_url,
+                file_date=datetime.now().date(),
+                uploaded_at=datetime.utcnow(),
+                file_size=os.path.getsize(temp_file_path),
+                file_category=category,
+            )
+            g.session.add(new_file)
+            g.session.flush()  # get new_file.file_id
+            file_id = new_file.file_id
 
-                # Process pages & visits concurrently
-                try:
-                    max_workers = 10
-                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        futures = []
-                        for page in details:
-                            page_number = page.get('page')
-                            logging.info(f"Processing page {page_number}")
-                            print(f"Processing page {page_number}")
+            # Commit so the File record is in DB before tasks start
+            g.session.commit()
 
-                            if page.get('category') == 'Clinical Records':
-                                visits = page.get('details', {}).get('visits', [])
-                                logging.info(f"Found {len(visits)} visits on page {page_number}")
-                                print(f"Found {len(visits)} visits on page {page_number}")
+            logging.info(f"Inserted new file record with file_id={file_id}")
+            print(f"Inserted new file record with file_id={file_id}")
 
-                                for visit in visits:
-                                    future = executor.submit(
-                                        process_visit,
-                                        visit=visit,
-                                        page_number=page_number,
-                                        service_periods=service_periods,
-                                        user_id=user.user_id,  # Pass user's ID
-                                        file_id=file_id
-                                    )
-                                    futures.append(future)
+            # 5. Build a Celery chain: 
+            #    extraction_task -> process_pages_task -> finalize_task
+            #
+            # We'll pass the necessary info to each subsequent task. 
+            # In this example, we pass the blob_url (where the file is stored),
+            # the file_type, user and file info, etc.
 
-                        for future in as_completed(futures):
-                            try:
-                                visit_results = future.result()
-                            except Exception as e:
-                                logging.exception(f"Error processing visit: {str(e)}")
-                                print(f"Error processing visit: {str(e)}")
+            # 5. Build a Celery chain
+            extraction = extraction_task.s(blob_url, file_type)
+            processing = process_pages_task.s(
+                user_id=user.user_id,
+                user_uuid=user_uuid,
+                file_info={
+                    'service_periods': service_periods,
+                    'file_id': file_id
+                }
+            )
+            finalization = finalize_task.s(user.user_id)
 
-                except Exception as e:
-                    logging.exception(f"Inserting Conditions Failed: {str(e)}")
-                    print(f"Inserting Conditions Failed: {str(e)}")
-                    raise
+            # Apply the chain
+            chain_result = (extraction | processing | finalization)()
 
-                uploaded_urls.append({
-                    'category': category,
-                    "fileName": uploaded_file.filename,
-                    "blobUrl": blob_url
-                })
-                logging.info(f"File '{uploaded_file.filename}' processed and uploaded successfully.")
-                
-                # Clean up temp file
-                try:
-                    os.remove(temp_file_path)
-                    logging.info(f"Temporary file {temp_file_path} removed successfully.")
-                except OSError as e:
-                    logging.warning(f"Failed to remove temporary file {temp_file_path}: {e}")
-                    print(f"Failed to remove temporary file {temp_file_path}: {e}")
-            else:
-                logging.error(f"Failed to upload file '{uploaded_file.filename}' to Azure.")
-                print(f"Failed to upload file '{uploaded_file.filename}' to Azure.")
-                uploaded_urls.append({
-                    'category': category,
-                    "fileName": uploaded_file.filename,
-                    "blobUrl": None,
-                    "error": "Failed to upload to Azure"
-                })
+            # Capture task IDs for tracking
+            task_ids = {
+                'extraction_task_id': extraction.freeze().id,
+                'processing_task_id': processing.freeze().id,
+                'finalization_task_id': finalization.freeze().id,
+                'chain_task_id': chain_result.id  # Overall chain ID
+            }
 
-        # Commit everything so newly inserted Conditions are in the DB
-        g.session.commit()
-        logging.info("All files have been processed and committed to the database.")
-        print("All files have been processed and committed to the database.")
+            uploaded_urls.append({
+                'category': category,
+                "fileName": uploaded_file.filename,
+                "blobUrl": blob_url,
+                "task_ids": task_ids  # for tracking
+            })
 
-        # Now discover any newly qualified nexus tags for this user
-        discover_nexus_tags(g.session, user.user_id)
-
-        # Optional: Revoke nexus tags that no longer qualify for this user
-        revoke_nexus_tags_if_invalid(g.session, user.user_id)
-        
-        # Final commit after nexus updates
-        g.session.commit()
+            # Clean up local temp file
+            try:
+                os.remove(temp_file_path)
+                logging.info(f"Temporary file {temp_file_path} removed successfully.")
+            except OSError as e:
+                logging.warning(f"Failed to remove temporary file {temp_file_path}: {e}")
+                print(f"Failed to remove temporary file {temp_file_path}: {e}")
 
         process_end_time = time.time()
         elapsed_time = process_end_time - process_start_time
-        logger.info(f"Total time to read and extract document: {elapsed_time:.2f} seconds.")
-        print(f">>>>>>>>>>>>>>>>>>>>PROCESSING TIME: {elapsed_time}<<<<<<<<<<<<<<<<<<<<<<")
+        logging.info(f"Total time to queue Celery tasks: {elapsed_time:.2f} seconds.")
+        print(f">>>>>>>>>>>>>>>>>>>>PROCESSING TIME (queuing tasks): {elapsed_time}<<<<<<<<<<<<<<<<<<<<<<")
 
-        return jsonify({"message": "File(s) processed", "files": uploaded_urls}), 201
+        # Return response immediately, while tasks run in background
+        return jsonify({"message": "File(s) uploaded and processing started", "files": uploaded_urls}), 202
 
     except Exception as e:
         g.session.rollback()
@@ -228,28 +197,6 @@ def upload():
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
 
-
-def extract_structured_data_from_file(file_path, file_type):
-    try:
-        # Read the file content
-        with open(file_path, 'rb') as f:
-            file_content = f.read()
-
-        # Process the document to extract text content
-        text_content = process_document(file_content, file_type)
-
-        # Parse the extracted text to get structured data
-        structured_data = parse_chat_completion(text_content)
-
-        # If structured_data is a Pydantic model, convert it to a dict
-        if hasattr(structured_data, 'dict'):
-            structured_data = structured_data.dict()
-
-        return structured_data
-
-    except Exception as e:
-        logging.error(f"Error extracting structured data from file {file_path}: {str(e)}")
-        return None
 
 @document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
 def get_documents():
