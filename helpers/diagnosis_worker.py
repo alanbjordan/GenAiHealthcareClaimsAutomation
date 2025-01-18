@@ -1,3 +1,5 @@
+# diagnosis_worker.py is a worker function to process a single diagnosis and handle embedding.
+
 import logging
 from helpers.diagnosis_processor import process_diagnosis
 from helpers.embedding_helpers import process_condition_embedding 

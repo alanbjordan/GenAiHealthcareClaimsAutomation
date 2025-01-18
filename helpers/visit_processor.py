@@ -1,3 +1,5 @@
+# visit_processor.py contains functions to process a single visit, including its diagnoses.
+
 import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed

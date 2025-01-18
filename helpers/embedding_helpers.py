@@ -1,4 +1,5 @@
 # helpers/embedding_helpers.py
+
 import logging
 from models.sql_models import Tag
 #from sqlalchemy.orm import Session
