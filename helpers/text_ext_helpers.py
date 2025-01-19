@@ -13,7 +13,6 @@ from urllib.parse import urlparse
 from pdf2image import convert_from_bytes
 from helpers.llm_helpers import *
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import List, Dict
 from typing import Union
 from io import BytesIO
@@ -111,11 +110,11 @@ def process_document(file_content: bytes, file_type: str) -> str:
 
 def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
     """
-    Convert PDF bytes to text by performing OCR on each page using multiprocessing.
-    
+    Convert PDF bytes to text by performing OCR on each page using multithreading.
+
     Args:
         pdf_bytes (bytes): The PDF file content in bytes.
-    
+
     Returns:
         List[str]: A list containing the extracted text for each page.
     """
@@ -133,12 +132,12 @@ def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
     page_num_image_tuples = list(enumerate(images, start=1))
     max_workers = min(32, len(images))  # Adjust based on your environment
 
-    logger.info(f"Starting OCR with {max_workers} worker processes.")
-    print(f"Starting OCR with {max_workers} worker processes.")
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all OCR tasks to the pool
+    logger.info(f"Starting OCR with {max_workers} threads.")
+    print(f"Starting OCR with {max_workers} threads.")
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all OCR tasks to the thread pool
         future_to_page = {executor.submit(ocr_image, pair): pair[0] for pair in page_num_image_tuples}
-        
+
         # As each task completes, gather the result
         for future in as_completed(future_to_page):
             page_num = future_to_page[future]
@@ -151,10 +150,10 @@ def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
                 # Depending on requirements, you can choose to continue or abort
                 # Here, we'll continue processing other pages
                 text_content.append(f"\n\nPage {page_num}:\n[Error processing page]")
-    
+
     # Optionally, sort the results by page number to maintain order
     text_content_sorted = sorted(text_content, key=extract_page_num)
-    
+
     logger.info("Completed OCR for all pages.")
     print("Completed OCR for all pages.")
     return text_content_sorted

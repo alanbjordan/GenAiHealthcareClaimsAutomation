@@ -263,3 +263,27 @@ def download_public_file_from_azure(blob_url):
         logging.error(f"Error downloading file from Azure Blob Storage at '{blob_url}': {e}")
         return None
     
+def download_blob_to_tempfile(blob_url, temp_file_path):
+    """
+    Downloads the blob from Azure using blob_url and writes it to a local temp file path.
+    
+    :param blob_url: The full URL of the blob in Azure.
+    :param temp_file_path: The local path (e.g., in /tmp) to which you want to write.
+    :return: The local temp_file_path for convenience, or None if there was an error.
+    """
+    try:
+        # Re-use your existing function to get the file contents from Azure
+        file_content = download_file_from_azure(blob_url)
+        if not file_content:
+            logging.error(f"Empty content returned for blob: {blob_url}")
+            return None
+        
+        # Write bytes to the local temp file
+        with open(temp_file_path, 'wb') as f:
+            f.write(file_content)
+        
+        logging.info(f"File successfully downloaded to local path: {temp_file_path}")
+        return temp_file_path
+    except Exception as e:
+        logging.error(f"Error writing blob to temp file '{temp_file_path}': {e}")
+        return None

@@ -6,17 +6,8 @@ from helpers.diagnosis_worker import worker_process_diagnosis
 
 def process_visit(visit, page_number, service_periods, user_id, file_id):
     """
-    Processes a single visit, including its diagnoses.
-
-    Args:
-        visit (dict): The visit details to process.
-        page_number (int): The page number where the visit was found.
-        service_periods (list): List of service period objects.
-        user_id (int): The user ID to associate with diagnoses.
-        file_id (int): The file ID to associate with diagnoses.
-
-    Returns:
-        dict: Contains date_of_visit and date_of_visit_dt.
+    Processes a single visit, including its diagnoses, using a ThreadPoolExecutor
+    for concurrency (no chunking).
     """
     date_of_visit = visit.get('date_of_visit')
     try:
@@ -39,16 +30,15 @@ def process_visit(visit, page_number, service_periods, user_id, file_id):
 
     # Determine if the visit date falls within any service period
     in_service = any(
-        period.service_start_date <= date_of_visit_dt <= period.service_end_date
+        period['service_start_date'] <= date_of_visit_dt <= period['service_end_date']
         for period in service_periods
     )
     logging.debug(f"Visit date {date_of_visit_dt} in service period: {in_service}")
     logging.info(f"Visit date {date_of_visit_dt} in service period: {in_service}")
     print(f"Visit date {date_of_visit_dt} in service period: {in_service}")
 
-    # Function to process a single diagnosis
+    # Function to process a single diagnosis with its own session
     def process_single_diagnosis(diagnosis):
-        # Each thread gets its own session
         session = ScopedSession()
         try:
             worker_process_diagnosis(
@@ -61,19 +51,18 @@ def process_visit(visit, page_number, service_periods, user_id, file_id):
                 in_service=in_service,
                 session=session
             )
+            session.commit()
         except Exception as e:
+            session.rollback()
             logging.error(f"Error processing diagnosis: {e}")
             print(f"Error processing diagnosis: {e}")
         finally:
-            # Ensure the session is removed after processing
             ScopedSession.remove()
 
-    # Use ThreadPoolExecutor to process diagnoses in parallel
+    # Process all diagnoses concurrently with up to 10 worker threads
     with ThreadPoolExecutor(max_workers=10) as executor:
-        # Submit all diagnosis tasks
-        futures = [executor.submit(process_single_diagnosis, diagnosis) for diagnosis in diagnosis_list]
-
-        # Handle results or exceptions
+        futures = [executor.submit(process_single_diagnosis, diag) for diag in diagnosis_list]
+        # Wait for tasks to finish
         for future in as_completed(futures):
             try:
                 future.result()

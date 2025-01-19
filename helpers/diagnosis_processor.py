@@ -1,3 +1,5 @@
+# diagnosis_processor.py is a helper function to process a single diagnosis and save it to the database.
+
 import logging
 from models.sql_models import Conditions
 
