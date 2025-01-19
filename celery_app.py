@@ -60,62 +60,71 @@ def extraction_task(self, blob_url, file_type):
         logging.exception(f"Extraction failed: {exc}")
         raise self.retry(exc=exc)
 
-# This task processes the pages extracted from a document, handling visits concurrently.
+from celery import Celery
+import logging
+from database.session import ScopedSession
+from helpers.visit_processor import process_visit
+
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def process_pages_task(self, details, user_id, user_uuid, file_info):
     """
-    Processes the pages extracted from a document, handling visits concurrently.
+    Processes the pages extracted from a document (synchronously, without thread pooling).
     Writes results to the DB using a ScopedSession.
     """
+    session = None
     try:
         service_periods = file_info.get('service_periods')
         file_id = file_info.get('file_id')
 
-        # We'll store aggregated results (optional usage)
         processed_results = []
 
-        with ScopedSession() as session:
-            max_workers = 10
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = []
+        # Explicitly create the session
+        session = ScopedSession()
 
-                # Iterate over each page in details
-                for page in details:
-                    page_number = page.get('page')
-                    logging.info(f"Processing page {page_number}")
+        # Iterate over each page in details
+        for page in details:
+            page_number = page.get('page')
+            logging.info(f"Processing page {page_number}")
 
-                    if page.get('category') == 'Clinical Records':
-                        visits = page.get('details', {}).get('visits', [])
-                        logging.info(f"Found {len(visits)} visits on page {page_number}")
+            if page.get('category') == 'Clinical Records':
+                visits = page.get('details', {}).get('visits', [])
+                logging.info(f"Found {len(visits)} visits on page {page_number}")
 
-                        for visit in visits:
-                            # We can process each visit in a ThreadPool
-                            future = executor.submit(
-                                process_visit,
-                                visit=visit,
-                                page_number=page_number,
-                                service_periods=service_periods,
-                                user_id=user_id,
-                                file_id=file_id
-                            )
-                            futures.append(future)
-
-                for future in as_completed(futures):
+                # Process each visit in a simple loop
+                for visit in visits:
                     try:
-                        visit_result = future.result()
-                        processed_results.append(visit_result)
+                        visit_result = process_visit(
+                            visit=visit,
+                            page_number=page_number,
+                            service_periods=service_periods,
+                            user_id=user_id,
+                            file_id=file_id
+                        )
+                        if visit_result is not None:
+                            processed_results.append(visit_result)
                     except Exception as e:
-                        logging.exception(f"Error processing visit: {str(e)}")
+                        logging.exception(f"Error processing visit on page {page_number}: {str(e)}")
+                        # Decide if you want to continue or re-raise. If you re-raise,
+                        # Celery can retry this task, etc.
 
-            # You might do additional session.commit() logic or other updates here
-            session.commit()
+        # Commit DB changes here
+        session.commit()
 
         # Return processed results for next step in chain if needed
         return processed_results
 
     except Exception as exc:
+        # If an error occurs, roll back any changes
+        if session is not None:
+            session.rollback()
         logging.exception(f"Processing pages failed: {exc}")
-        raise self.retry(exc=exc)
+        # You can choose to raise, or do something else
+        raise self.retry(exc=exc)  # or just `raise exc`
+
+    finally:
+        # Always remove the session to close out connections, etc.
+        if session is not None:
+            ScopedSession.remove()
 
 # This task performs final DB updates after pages are processed, e.g. discovering and revoking nexus tags.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
