@@ -11,8 +11,6 @@ from helpers.text_ext_helpers import read_and_extract_document
 from database.session import ScopedSession
 from helpers.azure_helpers import download_blob_to_tempfile
 from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
-
-# These functions are imported from helpers which makes commits to the database causeing too many connections
 from helpers.visit_processor import process_visit
 
 # Example: "redis://localhost:6379/0" or use your actual Redis connection string
@@ -60,71 +58,73 @@ def extraction_task(self, blob_url, file_type):
         logging.exception(f"Extraction failed: {exc}")
         raise self.retry(exc=exc)
 
-from celery import Celery
-import logging
-from database.session import ScopedSession
-from helpers.visit_processor import process_visit
+
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def process_pages_task(self, details, user_id, user_uuid, file_info):
     """
-    Processes the pages extracted from a document (synchronously, without thread pooling).
-    Writes results to the DB using a ScopedSession.
+    Processes pages in parallel at the 'visit' level using a ThreadPoolExecutor.
+    Each thread calls process_visit, which handles its own DB session internally.
     """
-    session = None
     try:
         service_periods = file_info.get('service_periods')
         file_id = file_info.get('file_id')
 
         processed_results = []
 
-        # Explicitly create the session
-        session = ScopedSession()
+        # We won't create a single session here because concurrency + a single
+        # session is not thread-safe. Instead, each process_visit call will
+        # handle its own sessions as needed.
 
-        # Iterate over each page in details
-        for page in details:
-            page_number = page.get('page')
-            logging.info(f"Processing page {page_number}")
+        # Use a ThreadPoolExecutor to handle multiple visits concurrently.
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = []
 
-            if page.get('category') == 'Clinical Records':
-                visits = page.get('details', {}).get('visits', [])
-                logging.info(f"Found {len(visits)} visits on page {page_number}")
+            # Iterate over each page in details
+            for page in details:
+                page_number = page.get('page')
+                logging.info(f"Processing page {page_number}")
 
-                # Process each visit in a simple loop
-                for visit in visits:
-                    try:
-                        visit_result = process_visit(
+                if page.get('category') == 'Clinical Records':
+                    visits = page.get('details', {}).get('visits', [])
+                    logging.info(f"Found {len(visits)} visits on page {page_number}")
+
+                    # Submit each visit to the executor
+                    for visit in visits:
+                        future = executor.submit(
+                            process_visit,
                             visit=visit,
                             page_number=page_number,
                             service_periods=service_periods,
                             user_id=user_id,
                             file_id=file_id
                         )
-                        if visit_result is not None:
-                            processed_results.append(visit_result)
-                    except Exception as e:
-                        logging.exception(f"Error processing visit on page {page_number}: {str(e)}")
-                        # Decide if you want to continue or re-raise. If you re-raise,
-                        # Celery can retry this task, etc.
+                        futures.append(future)
 
-        # Commit DB changes here
-        session.commit()
+            # Gather results as they complete
+            for future in as_completed(futures):
+                try:
+                    visit_result = future.result()  # process_visit return
+                    if visit_result is not None:
+                        processed_results.append(visit_result)
+                except Exception as e:
+                    logging.exception(f"Error processing a visit: {e}")
 
-        # Return processed results for next step in chain if needed
+        # If you have any final logic that needs to run *after* all visits 
+        # complete (e.g., analyzing aggregated results or performing 
+        # additional DB commits), do it here. For example:
+        #
+        # with ScopedSession() as session:
+        #     # do final queries, commit if necessary
+        #     session.commit()
+
         return processed_results
 
     except Exception as exc:
-        # If an error occurs, roll back any changes
-        if session is not None:
-            session.rollback()
         logging.exception(f"Processing pages failed: {exc}")
-        # You can choose to raise, or do something else
-        raise self.retry(exc=exc)  # or just `raise exc`
+        # Celery retry logic:
+        raise self.retry(exc=exc)
 
-    finally:
-        # Always remove the session to close out connections, etc.
-        if session is not None:
-            ScopedSession.remove()
 
 # This task performs final DB updates after pages are processed, e.g. discovering and revoking nexus tags.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
