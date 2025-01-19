@@ -7,25 +7,19 @@ import json
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import ssl
-from helpers.azure_helpers import download_blob_to_tempfile
-from helpers.visit_processor import process_visit
-from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
 from helpers.text_ext_helpers import read_and_extract_document
 from database.session import ScopedSession
+from helpers.azure_helpers import download_blob_to_tempfile
+from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
+
+# These functions are imported from helpers which makes commits to the database causeing too many connections
+from helpers.visit_processor import process_visit
 
 # Example: "redis://localhost:6379/0" or use your actual Redis connection string
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'rediss://:e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=@vaclaimguard.redis.cache.windows.net:6380/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
 celery = Celery('vaclaimguard', broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
-"""
-vaclaimguard.redis.cache.windows.net:6380,password=e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=,ssl=True,abortConnect=False
-
-
-redis-cli -h vaclaimguard.redis.cache.windows.net -p 6380 -a e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8= --tls
-"""
-
-
 
 celery.conf.update(
     broker_use_ssl={
@@ -36,6 +30,7 @@ celery.conf.update(
     }
 )
 
+# This task downloads the file from Azure (if needed) and extracts document details.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def extraction_task(self, blob_url, file_type):
     """
@@ -65,7 +60,7 @@ def extraction_task(self, blob_url, file_type):
         logging.exception(f"Extraction failed: {exc}")
         raise self.retry(exc=exc)
 
-
+# This task processes the pages extracted from a document, handling visits concurrently.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def process_pages_task(self, details, user_id, user_uuid, file_info):
     """
@@ -73,9 +68,7 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
     Writes results to the DB using a ScopedSession.
     """
     try:
-        print(f"service_periods******: {file_info.get('service_periods')}")
         service_periods = file_info.get('service_periods')
-        print(f"service_periods******: {service_periods}")
         file_id = file_info.get('file_id')
 
         # We'll store aggregated results (optional usage)
@@ -124,7 +117,7 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
         logging.exception(f"Processing pages failed: {exc}")
         raise self.retry(exc=exc)
 
-
+# This task performs final DB updates after pages are processed, e.g. discovering and revoking nexus tags.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def finalize_task(self, processed_results, user_id):
     """

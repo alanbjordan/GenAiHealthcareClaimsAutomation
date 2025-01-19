@@ -27,8 +27,6 @@ from helpers.sql_helpers import *
 from helpers.cors_helpers import cors_preflight
 from helpers.upload.validation_helper import validate_and_setup_request
 from helpers.upload.usr_svcp_helpers import get_user_and_service_periods
-
-
 # Celery task imports
 from flask import Blueprint, request, jsonify, g
 from models.sql_models import *  # Import File and Users models
@@ -49,7 +47,6 @@ from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invali
 
 # Import your Celery tasks
 from celery_app import extraction_task, process_pages_task, finalize_task
-
 
 # Create a blueprint for document routes
 document_bp = Blueprint('document_bp', __name__)
@@ -197,7 +194,6 @@ def upload():
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
 
-
 @document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
 def get_documents():
 
@@ -270,12 +266,6 @@ def delete_document(file_id):
         logging.error(f"Error deleting file with id {file_id}: {e}")
         return jsonify({"error": f"Failed to delete file: {str(e)}"}), 500
 
-
-def extract_blob_name(blob_url):
-    # Example URL: "https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>"
-    return "/".join(blob_url.split("/")[4:])  # Gets the blob name from the full URL
-
-
 @document_bp.route('/documents/rename/<int:file_id>', methods=['PUT', 'OPTIONS'])
 def rename_document(file_id):
     data = request.get_json()
@@ -338,7 +328,6 @@ def rename_document(file_id):
         g.session.rollback()
         logging.error(f"Failed to rename file ID {file_id}: {str(e)}")
         return jsonify({"error": f"Failed to rename file: {str(e)}"}), 500
-
 
 @document_bp.route('/documents/change-category/<int:file_id>', methods=['PUT', 'OPTIONS'])
 def change_document_category(file_id):
@@ -501,3 +490,7 @@ def get_file_url(blob_name):
             return jsonify({"error": "Failed to generate SAS URL"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+def extract_blob_name(blob_url):
+    # Example URL: "https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>"
+    return "/".join(blob_url.split("/")[4:])  # Gets the blob name from the full URL
