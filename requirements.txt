@@ -70,7 +70,6 @@ simple-websocket==1.0.0
 soupsieve==2.6
 starkbank-ecdsa==2.2.0
 tinycss2==1.4.0
-typing_extensions==4.11.0
 wallet==2.1.525
 webencodings==0.5.1
 Werkzeug==3.0.2
