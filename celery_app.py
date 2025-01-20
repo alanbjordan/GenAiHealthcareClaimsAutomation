@@ -10,7 +10,7 @@ import ssl
 from helpers.text_ext_helpers import read_and_extract_document
 from database.session import ScopedSession
 from helpers.azure_helpers import download_blob_to_tempfile
-from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
+from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid, File
 from helpers.visit_processor import process_visit
 
 # Example: "redis://localhost:6379/0" or use your actual Redis connection string
@@ -30,21 +30,31 @@ celery.conf.update(
 
 # This task downloads the file from Azure (if needed) and extracts document details.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
-def extraction_task(self, blob_url, file_type):
+def extraction_task(self, blob_url, file_type, file_id):
     """
     Downloads the file from Azure (if needed) and extracts document details.
     Returns parsed details as a Python object.
     """
     try:
-        # Download the blob to a local temp file
+        # 1) Mark the file as "Extracting Data"
+        with ScopedSession() as session:
+            file_record = session.query(File).filter_by(file_id=file_id).first()
+            if file_record:
+                file_record.status = 'Extracting Data'
+                session.add(file_record)
+                session.commit()
+
+        # 2) Download the blob to a local temp file
         with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
             local_path = tmp_file.name
 
         download_blob_to_tempfile(blob_url, local_path)
 
-        # Now read & extract
+        # 3) Perform extraction
         details_str = read_and_extract_document(local_path, file_type)
-        os.remove(local_path)  # Clean up local copy after extraction
+
+        # 4) Clean up local copy after extraction
+        os.remove(local_path)
 
         # If extraction returns None or fails, parse as empty
         if not details_str:
@@ -70,13 +80,17 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
         service_periods = file_info.get('service_periods')
         file_id = file_info.get('file_id')
 
+        # 1) Mark the file as "Finding Evidence"
+        with ScopedSession() as session:
+            file_record = session.query(File).filter_by(file_id=file_id).first()
+            if file_record:
+                file_record.status = 'Finding Evidence'
+                session.add(file_record)
+                session.commit()
+
         processed_results = []
 
-        # We won't create a single session here because concurrency + a single
-        # session is not thread-safe. Instead, each process_visit call will
-        # handle its own sessions as needed.
-
-        # Use a ThreadPoolExecutor to handle multiple visits concurrently.
+        # 2) Use a ThreadPoolExecutor to handle multiple visits concurrently.
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
 
@@ -101,7 +115,7 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
                         )
                         futures.append(future)
 
-            # Gather results as they complete
+            # 3) Gather results as they complete
             for future in as_completed(futures):
                 try:
                     visit_result = future.result()  # process_visit return
@@ -110,25 +124,17 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
                 except Exception as e:
                     logging.exception(f"Error processing a visit: {e}")
 
-        # If you have any final logic that needs to run *after* all visits 
-        # complete (e.g., analyzing aggregated results or performing 
-        # additional DB commits), do it here. For example:
-        #
-        # with ScopedSession() as session:
-        #     # do final queries, commit if necessary
-        #     session.commit()
-
+        # 4) Return processed results
         return processed_results
 
     except Exception as exc:
         logging.exception(f"Processing pages failed: {exc}")
         # Celery retry logic:
-        raise self.retry(exc=exc)
 
 
 # This task performs final DB updates after pages are processed, e.g. discovering and revoking nexus tags.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
-def finalize_task(self, processed_results, user_id):
+def finalize_task(self, processed_results, user_id, file_id):
     """
     Final DB updates after pages are processed, e.g. discovering and revoking nexus tags.
     """
@@ -139,6 +145,11 @@ def finalize_task(self, processed_results, user_id):
 
             # Optionally revoke nexus tags that no longer qualify
             revoke_nexus_tags_if_invalid(session, user_id)
+            # Now update the file’s status to "Complete"
+            file_record = session.query(File).filter_by(file_id=file_id).first()
+            if file_record:
+                file_record.status = 'Complete'
+                session.add(file_record)
 
             session.commit()
 
@@ -147,4 +158,12 @@ def finalize_task(self, processed_results, user_id):
 
     except Exception as exc:
         logging.exception(f"Finalize step failed: {exc}")
-        raise self.retry(exc=exc)
+        # Optionally update status to "Failed"
+        with ScopedSession() as session:
+            file_record = session.query(File).filter_by(file_id=file_id).first()
+            if file_record:
+                file_record.status = 'Failed'
+                session.add(file_record)
+                session.commit()
+
+            raise self.retry(exc=exc)

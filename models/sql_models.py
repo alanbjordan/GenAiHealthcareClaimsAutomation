@@ -47,6 +47,7 @@ class File(db.Model):
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     file_size = db.Column(db.Integer, nullable=True)
     file_category = db.Column(db.String(50), nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='Uploading')
 
     user = db.relationship('Users', back_populates='files', lazy='select')
 
