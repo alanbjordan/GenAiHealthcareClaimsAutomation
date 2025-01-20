@@ -124,6 +124,7 @@ def upload():
                 uploaded_at=datetime.utcnow(),
                 file_size=os.path.getsize(temp_file_path),
                 file_category=category,
+                status="Uploading",
             )
             g.session.add(new_file)
             g.session.flush()  # get new_file.file_id
@@ -143,7 +144,7 @@ def upload():
             # the file_type, user and file info, etc.
 
             # 5. Build a Celery chain
-            extraction = extraction_task.s(blob_url, file_type)
+            extraction = extraction_task.s(blob_url, file_type, file_id)
             processing = process_pages_task.s(
                 user_id=user.user_id,
                 user_uuid=user_uuid,
@@ -152,7 +153,7 @@ def upload():
                     'file_id': file_id
                 }
             )
-            finalization = finalize_task.s(user.user_id)
+            finalization = finalize_task.s(user.user_id, file_id)
 
             # Apply the chain
             chain_result = (extraction | processing | finalization)()
@@ -194,9 +195,8 @@ def upload():
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
 
-@document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'DELETE', 'PUT'])
+@document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'PUT'])
 def get_documents():
-
     # GET request logic
     user_uuid = request.args.get('userUUID')
     if not user_uuid:
@@ -215,10 +215,12 @@ def get_documents():
         "file_type": file.file_type,
         "size": f"{file.file_size / (1024 * 1024):.2f}MB" if file.file_size else "Unknown",
         "shared": "Only Me",
-        "modified": file.uploaded_at.strftime("%d/%m/%Y")
+        "modified": file.uploaded_at.strftime("%d/%m/%Y"),
+        "status": file.status  # <-- Add this line to include file status
     } for file in files]
 
     return jsonify(document_list), 200
+
 
 @document_bp.route('/documents/delete/<int:file_id>', methods=['DELETE', 'OPTIONS'])
 def delete_document(file_id):
