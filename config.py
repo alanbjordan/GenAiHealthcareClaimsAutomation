@@ -10,5 +10,5 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
 
     # CORS settings
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "https://portal.vaclaimguard.com")
+    CORS_ORIGINS = os.getenv("CORS_ORIGINS")
     CORS_SUPPORTS_CREDENTIALS = True
