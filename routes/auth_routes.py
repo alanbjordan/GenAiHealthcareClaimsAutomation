@@ -108,6 +108,7 @@ def decode_jwt_no_verify(token_str):
 
 # ----- Login Endpoint -----
 @auth_bp.route('/login', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def login():
     data = request.get_json()
     logging.debug('Received login request with data: %s', data)
@@ -159,6 +160,7 @@ def login():
 
 # ----- Google Login Endpoint -----
 @auth_bp.route('/google-login', methods=['POST', 'OPTIONS'])
+@pre_authorized_cors_preflight
 def google_login():
     logging.debug('google/login backend hit')
     data = request.get_json()
