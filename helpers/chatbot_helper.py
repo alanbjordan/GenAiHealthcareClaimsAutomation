@@ -495,6 +495,55 @@ def continue_conversation(
 
         # 6) Evaluate final status
         if updated_run.status == "completed":
+                        # *** NEW: Beta Threads usage logging ***
+            # We'll do it here, before returning the final message.
+
+            # 6a) Retrieve the usage from updated_run
+            usage_obj = getattr(updated_run, "usage", None)
+            if usage_obj:
+                # We have usage: prompt_tokens, completion_tokens, total_tokens
+                prompt_tokens = usage_obj.prompt_tokens
+                completion_tokens = usage_obj.completion_tokens
+                total_tokens = usage_obj.total_tokens
+
+                # Now, let's log it in openai_usage_logs
+                from models.sql_models import Users, OpenAIUsageLog
+                from datetime import datetime
+                import decimal
+
+                db_session = g.session
+                user = db_session.query(Users).filter_by(user_id=user_id).first()
+                if user:
+                    # Suppose we do a cost-based approach for "gpt-4o"
+                    # e.g. $0.06 per 1k input => 0.00006 per token, etc.
+                    # Adjust the numbers as needed
+                    cost_per_prompt_token = decimal.Decimal("0.0000025")  # $2.50 per 1M
+                    cost_per_completion_token = decimal.Decimal("0.00001")# $10 per 1M
+
+                    # Calculate cost
+                    prompt_cost = prompt_tokens * cost_per_prompt_token
+                    completion_cost = completion_tokens * cost_per_completion_token
+                    total_cost = prompt_cost + completion_cost
+
+                    # Insert a usage log row
+                    usage_log = OpenAIUsageLog(
+                        user_id=user_id,
+                        model=updated_run.model or "gpt-4o",  # e.g. "gpt-4o"
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
+                        cost=total_cost,
+                        created_at=datetime.utcnow()
+                    )
+                    db_session.add(usage_log)
+
+                    # Update user’s credits or balance
+                    # If you do token-based:
+                    # user.credits_remaining -= total_tokens
+                    user.credits_remaining -= total_tokens
+
+                    db_session.commit()
+
             msgs = client.beta.threads.messages.list(thread_id=thread.id)
             assistant_msgs = [m for m in msgs.data if m.role == "assistant"]
             if assistant_msgs:
