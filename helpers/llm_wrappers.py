@@ -82,3 +82,71 @@ def call_openai_chat_create(
     db_session.commit()
 
     return response
+
+
+def call_openai_embeddings(
+    user_id: int,
+    input_text: str,
+    model: str,
+    cost_per_token: decimal.Decimal, 
+    **kwargs
+):
+    """
+    A wrapper for client.embeddings.create(...) that:
+      1) Looks up the user
+      2) Calls the OpenAI embeddings endpoint
+      3) Logs usage info in 'openai_usage_logs'
+      4) Updates user credits/cost
+      5) Returns the raw response
+
+    :param user_id: The user’s ID
+    :param input_text: The text to embed
+    :param model: The embeddings model (e.g. "text-embedding-3-small")
+    :param cost_per_token: Rate in USD per token (adjust for your model's pricing)
+    :param **kwargs: Additional arguments (if needed)
+    :return: The raw OpenAI response object (including usage info)
+    """
+    db_session = g.session
+    user = db_session.query(Users).filter_by(user_id=user_id).first()
+    if not user:
+        raise ValueError(f"User not found (user_id={user_id}).")
+
+    # 1) Make the embeddings call
+    response = client.embeddings.create(
+        input=input_text,
+        model=model,
+        **kwargs
+    )
+
+    # 2) Extract usage
+    usage_obj = getattr(response, "usage", None)
+    if usage_obj:
+        prompt_tokens = usage_obj.prompt_tokens
+        total_tokens = usage_obj.total_tokens
+    else:
+        prompt_tokens = 0
+        total_tokens = 0
+
+    # 3) Calculate cost
+    # For embeddings, you'll need the correct rate for your model
+    # e.g. If it's $0.0001 per 1K tokens => cost_per_token=0.0000001
+    cost_for_this_call = total_tokens * cost_per_token
+
+    # 4) Insert usage log
+    usage_log = OpenAIUsageLog(
+        user_id=user_id,
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=0,  # embeddings typically have no completion_tokens
+        total_tokens=total_tokens,
+        cost=cost_for_this_call,
+        created_at=datetime.utcnow()
+    )
+    db_session.add(usage_log)
+
+    # 5) Update user’s credits
+    user.credits_remaining -= total_tokens
+
+    db_session.commit()
+
+    return response

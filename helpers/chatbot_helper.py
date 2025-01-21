@@ -9,7 +9,8 @@ import traceback  # For printing errors
 from flask import g
 from openai import OpenAI
 from pinecone import Pinecone
-from helpers.llm_wrappers import call_openai_chat_create
+import decimal
+from helpers.llm_wrappers import call_openai_chat_create, call_openai_embeddings
 
 # Import both Conditions and ConditionEmbedding so we can do the basic list + semantic search
 from models.sql_models import Conditions, ConditionEmbedding, NexusTags, Tag
@@ -83,26 +84,27 @@ def clean_up_query_with_llm(user_id: int, user_query: str) -> str:
 ###############################################################################
 # 3. EMBEDDING FUNCTIONS
 ###############################################################################
-def get_embedding_small(text: str) -> list:
-    """
-    Gets a 1536-dimensional embedding vector for `text` using the SMALL model.
-    """
-    response = client.embeddings.create(
-        input=text,
-        model=EMBEDDING_MODEL_SMALL
+def get_embedding_small(user_id: int, text: str) -> list:
+    # $0.020 per 1M => 0.00000002 per token
+    cost_rate = decimal.Decimal("0.00000002")
+    response = call_openai_embeddings(
+        user_id=user_id,
+        input_text=text,
+        model="text-embedding-3-small",
+        cost_per_token=cost_rate
     )
     return response.data[0].embedding
 
-def get_embedding_large(text: str) -> list:
-    """
-    Gets a 3072-dimensional embedding vector for `text` using the LARGE model.
-    """
-    response = client.embeddings.create(
-        input=text,
-        model=EMBEDDING_MODEL_LARGE
+def get_embedding_large(user_id: int, text: str) -> list:
+    # $0.130 per 1M => 0.00000013 per token
+    cost_rate = decimal.Decimal("0.00000013")
+    response = call_openai_embeddings(
+        user_id=user_id,
+        input_text=text,
+        model="text-embedding-3-large",
+        cost_per_token=cost_rate
     )
     return response.data[0].embedding
-
 
 ###############################################################################
 # 4. MULTITHREADED SECTION RETRIEVAL FOR CFR / M21
@@ -211,7 +213,7 @@ def fetch_matches_content_m21(search_results, max_workers=3) -> list:
 ###############################################################################
 def search_cfr_documents(user_id, query: str, top_k: int = 3) -> str:
     cleaned_query = clean_up_query_with_llm(user_id, query)
-    query_emb = get_embedding_small(cleaned_query)
+    query_emb = get_embedding_small(user_id, cleaned_query)
 
     results = index_cfr.query(
         vector=query_emb,
@@ -235,7 +237,7 @@ def search_cfr_documents(user_id, query: str, top_k: int = 3) -> str:
 
 def search_m21_documents(user_id, query: str, top_k: int = 3) -> str:
     cleaned_query = clean_up_query_with_llm(user_id, query)
-    query_emb = get_embedding_small(cleaned_query)
+    query_emb = get_embedding_small(user_id, cleaned_query)
 
     results = index_m21.query(
         vector=query_emb,
