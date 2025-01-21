@@ -6,10 +6,10 @@ import requests
 import concurrent.futures
 import time
 import traceback  # For printing errors
-
 from flask import g
 from openai import OpenAI
 from pinecone import Pinecone
+from helpers.llm_wrappers import call_openai_chat_create
 
 # Import both Conditions and ConditionEmbedding so we can do the basic list + semantic search
 from models.sql_models import Conditions, ConditionEmbedding, NexusTags, Tag
@@ -39,13 +39,20 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 index_cfr = pc.Index(INDEX_NAME_CFR)
 index_m21 = pc.Index(INDEX_NAME_M21)
 
+PART_3_URL = "https://vetdoxstorage.blob.core.windows.net/vector-text/part_3_flattened.json"
+PART_4_URL = "https://vetdoxstorage.blob.core.windows.net/vector-text/part_4_flattened.json"
+M21_1_URL = "https://vetdoxstorage.blob.core.windows.net/vector-text/m21_1_chunked3k.json"
+M21_5_URL = "https://vetdoxstorage.blob.core.windows.net/vector-text/m21_5_chunked3k.json"
+
+
 ###############################################################################
 # 2. QUERY CLEANUP
 ###############################################################################
-def clean_up_query_with_llm(user_query: str) -> str:
+def clean_up_query_with_llm(user_id: int, user_query: str) -> str:
     """
     Uses an OpenAI LLM to rewrite the user query in a more standardized,
     formal, or clarified way—removing slang, expanding contractions, etc.
+    Now uses call_openai_chat_create to log usage automatically.
     """
     system_message = (
         "You are a helpful assistant that rewrites user queries for better text embeddings. "
@@ -60,14 +67,17 @@ def clean_up_query_with_llm(user_query: str) -> str:
         {"role": "user", "content": user_query},
     ]
 
-    response = client.chat.completions.create(
-        model="gpt-4o",  # Or any model you have access to
+    # --- NEW: Use your wrapper ---
+    response = call_openai_chat_create(
+        user_id=user_id,
+        model="gpt-4o",
         messages=messages,
         temperature=0
     )
 
     cleaned_query = response.choices[0].message.content
     return cleaned_query.strip()
+
 
 
 ###############################################################################
@@ -99,25 +109,30 @@ def get_embedding_large(text: str) -> list:
 ###############################################################################
 def fetch_matches_content(search_results, max_workers=3) -> list:
     """
-    Parallel fetch of section text for all Pinecone matches (38 CFR).
+    Fetch section text for all Pinecone matches (38 CFR) from remote JSON files on Azure Blob Storage.
     Returns a list of dicts with 'section_number' and 'matching_text'.
     """
     matches = search_results.get("matches", [])
 
     def get_section_text(section_number: str, part_number: str) -> str:
-        import os
+        # 1) Decide which URL to request
         if part_number == "3":
-            file_path = os.path.join("json", "json/part_3_flattened.json")
+            url = PART_3_URL
         elif part_number == "4":
-            file_path = os.path.join("json", "json/part_4_flattened.json")
+            url = PART_4_URL
         else:
             return None
 
-        if not os.path.exists(file_path):
+        # 2) Fetch and parse the JSON data from Azure
+        try:
+            resp = requests.get(url)
+            resp.raise_for_status()  # will raise an exception if 4xx/5xx
+            data = resp.json()
+        except Exception as e:
+            print(f"[ERROR] Unable to fetch or parse JSON from {url}: {e}")
             return None
 
-        with open(file_path, "r") as f:
-            data = json.load(f)
+        # 3) Search for the matching section_number
         for item in data:
             meta = item.get("metadata", {})
             if meta.get("section_number") == section_number:
@@ -132,6 +147,7 @@ def fetch_matches_content(search_results, max_workers=3) -> list:
         if not section_num or not part_number:
             continue
 
+        # fetch the matching text from Azure
         section_text = get_section_text(section_num, part_number)
         matching_texts.append({
             "section_number": section_num,
@@ -143,25 +159,30 @@ def fetch_matches_content(search_results, max_workers=3) -> list:
 
 def fetch_matches_content_m21(search_results, max_workers=3) -> list:
     """
-    Parallel fetch of article text for all Pinecone matches (M21).
+    Fetch article text for all Pinecone matches (M21) from remote JSON files in Azure Blob Storage.
     Returns a list of dicts with 'article_number' and 'matching_text'.
     """
     matches = search_results.get("matches", [])
 
     def get_article_text(article_number: str, manual: str) -> str:
-        import os
+        # Determine which URL to download based on manual
         if manual == "M21-1":
-            file_path = os.path.join("json", "json/m21_1_chunked3k.json")
+            url = M21_1_URL
         elif manual == "M21-5":
-            file_path = os.path.join("json", "json/m21_5_chunked3k.json")
+            url = M21_5_URL
         else:
             return None
 
-        if not os.path.exists(file_path):
+        # Fetch and parse the JSON data from Azure
+        try:
+            resp = requests.get(url)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            print(f"[ERROR] Unable to fetch or parse JSON from {url}: {e}")
             return None
 
-        with open(file_path, "r") as f:
-            data = json.load(f)
+        # Search for the matching article_number
         for item in data:
             meta = item.get("metadata", {})
             if meta.get("article_number") == article_number:
@@ -188,8 +209,8 @@ def fetch_matches_content_m21(search_results, max_workers=3) -> list:
 ###############################################################################
 # 5. PINECONE SEARCH FUNCTIONS (CFR and M21) - using the SMALL model
 ###############################################################################
-def search_cfr_documents(query: str, top_k: int = 3) -> str:
-    cleaned_query = clean_up_query_with_llm(query)
+def search_cfr_documents(user_id, query: str, top_k: int = 3) -> str:
+    cleaned_query = clean_up_query_with_llm(user_id, query)
     query_emb = get_embedding_small(cleaned_query)
 
     results = index_cfr.query(
@@ -207,12 +228,13 @@ def search_cfr_documents(query: str, top_k: int = 3) -> str:
         sec_num = item["section_number"]
         text_snippet = item["matching_text"] or "N/A"
         references_str += f"\n---\nSection {sec_num}:\n{text_snippet}\n"
+    print(references_str)
 
     return references_str.strip()
 
 
-def search_m21_documents(query: str, top_k: int = 3) -> str:
-    cleaned_query = clean_up_query_with_llm(query)
+def search_m21_documents(user_id, query: str, top_k: int = 3) -> str:
+    cleaned_query = clean_up_query_with_llm(user_id, query)
     query_emb = get_embedding_small(cleaned_query)
 
     results = index_m21.query(
@@ -229,7 +251,7 @@ def search_m21_documents(query: str, top_k: int = 3) -> str:
         article_num = item["article_number"]
         text_snippet = item["matching_text"] or "N/A"
         references_str += f"\n---\nArticle {article_num}:\n{text_snippet}\n"
-
+    print(references_str)
     return references_str.strip()
 
 
@@ -388,7 +410,7 @@ def continue_conversation(
                         args = json.loads(function_args)
                         query_text = args["query"]
                         top_k_arg = args.get("top_k", 3)
-                        result_str = search_cfr_documents(query_text, top_k=top_k_arg)
+                        result_str = search_cfr_documents(user_id, query_text, top_k=top_k_arg)
                         tool_outputs.append({
                             "tool_call_id": call.id,
                             "output": result_str
@@ -399,7 +421,7 @@ def continue_conversation(
                         args = json.loads(function_args)
                         query_text = args["query"]
                         top_k_arg = args.get("top_k", 3)
-                        result_str = search_m21_documents(query_text, top_k=top_k_arg)
+                        result_str = search_m21_documents(user_id, query_text, top_k=top_k_arg)
                         tool_outputs.append({
                             "tool_call_id": call.id,
                             "output": result_str

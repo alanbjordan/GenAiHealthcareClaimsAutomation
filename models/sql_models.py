@@ -250,7 +250,7 @@ class UserSubscription(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     # Relationships
-    user = db.relationship('Users', back_populates='user_subscriptions', lazy='select')
+    #user = db.relationship('Users', back_populates='user_subscriptions', lazy='select')
     plan = db.relationship('SubscriptionPlan', back_populates='user_subscriptions', lazy='select')
 
     def __repr__(self):
