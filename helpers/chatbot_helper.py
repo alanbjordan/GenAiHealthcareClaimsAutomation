@@ -298,7 +298,7 @@ def list_user_conditions(user_id: int) -> str:
 def semantic_search_user_conditions(user_id: int, query_text: str, limit: int = 10) -> str:
     session = g.session
 
-    query_vec = get_embedding_large(query_text)
+    query_vec = get_embedding_large(user_id, query_text)
 
     results = (
         session.query(Conditions)
