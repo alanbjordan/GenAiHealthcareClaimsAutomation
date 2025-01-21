@@ -37,19 +37,6 @@ logger = logging.getLogger(__name__)
 #client = OpenAI(api_key=api_key)
 
 # ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
 
 def generate_summary(text_content):
     """Generate a summary of the text content using OpenAI GPT."""
@@ -73,49 +60,6 @@ def generate_summary(text_content):
         logging.error(f"Error generating summary: {str(e)}")
         print(e)
         raise e
-
-# Global variable to store progress messages
-progress_messages = []
-
-# Global dictionaries to store OCR results and diagnoses
-in_service_page_texts = {}
-post_service_page_texts = {}
-in_service_diagnosis = {}
-post_service_diagnosis = {}
-
-def process_files(files, result_dict, file_type):
-    """Process each file, performing OCR and storing the results."""
-    for file_num, file in enumerate(files, start=1):
-        progress_messages.append(f"Processing {file_type} file {file_num}/{len(files)}...")
-        if file.content_type == 'application/pdf':
-            process_pdf(file, result_dict, file_num, file_type)
-        else:
-            process_image(file, result_dict, file_num, file_type)
-
-def process_pdf(pdf_file, result_dict, file_num, file_type):
-    """Convert PDF to images and perform OCR on each page."""
-    try:
-        images = convert_from_bytes(pdf_file.read())
-        progress_messages.append(f"PDF {file_type} file {file_num}: {len(images)} pages to process...")
-        for page_num, image in enumerate(images, start=1):
-            text = pytesseract.image_to_string(image)
-            result_dict[f"{file_type}_file_{file_num}_page_{page_num}"] = text
-            progress_messages.append(f"Processed {file_type} file {file_num}, page {page_num}")
-    except Exception as e:
-        progress_messages.append(f"Error processing PDF for {file_type}: {str(e)}")
-        logging.error(f"Error processing PDF for {file_type}: {str(e)}")
-
-def process_image(image_file, result_dict, file_num, file_type):
-    """Perform OCR on image files."""
-    try:
-        progress_messages.append(f"Processing {file_type} image file {file_num}...")
-        image = Image.open(image_file)
-        text = pytesseract.image_to_string(image)
-        result_dict[f"{file_type}_file_{file_num}"] = text
-        progress_messages.append(f"Processed {file_type} image file {file_num}")
-    except Exception as e:
-        progress_messages.append(f"Error processing image for {file_type}: {str(e)}")
-        logging.error(f"Error processing image for {file_type}: {str(e)}")
 
 # Function to classify diagnosis with GPT
 def classify_and_store_diagnosis(pages_text, prompt_text, model="gpt-4o"):
@@ -664,3 +608,47 @@ def structured_summarize_bva_decision_llm(decision_citation, full_text, client=c
 
     except Exception as e:
         raise e
+    
+
+    # Global variable to store progress messages
+progress_messages = []
+
+# Global dictionaries to store OCR results and diagnoses
+in_service_page_texts = {}
+post_service_page_texts = {}
+in_service_diagnosis = {}
+post_service_diagnosis = {}
+
+def process_files(files, result_dict, file_type):
+    """Process each file, performing OCR and storing the results."""
+    for file_num, file in enumerate(files, start=1):
+        progress_messages.append(f"Processing {file_type} file {file_num}/{len(files)}...")
+        if file.content_type == 'application/pdf':
+            process_pdf(file, result_dict, file_num, file_type)
+        else:
+            process_image(file, result_dict, file_num, file_type)
+
+def process_pdf(pdf_file, result_dict, file_num, file_type):
+    """Convert PDF to images and perform OCR on each page."""
+    try:
+        images = convert_from_bytes(pdf_file.read())
+        progress_messages.append(f"PDF {file_type} file {file_num}: {len(images)} pages to process...")
+        for page_num, image in enumerate(images, start=1):
+            text = pytesseract.image_to_string(image)
+            result_dict[f"{file_type}_file_{file_num}_page_{page_num}"] = text
+            progress_messages.append(f"Processed {file_type} file {file_num}, page {page_num}")
+    except Exception as e:
+        progress_messages.append(f"Error processing PDF for {file_type}: {str(e)}")
+        logging.error(f"Error processing PDF for {file_type}: {str(e)}")
+
+def process_image(image_file, result_dict, file_num, file_type):
+    """Perform OCR on image files."""
+    try:
+        progress_messages.append(f"Processing {file_type} image file {file_num}...")
+        image = Image.open(image_file)
+        text = pytesseract.image_to_string(image)
+        result_dict[f"{file_type}_file_{file_num}"] = text
+        progress_messages.append(f"Processed {file_type} image file {file_num}")
+    except Exception as e:
+        progress_messages.append(f"Error processing image for {file_type}: {str(e)}")
+        logging.error(f"Error processing image for {file_type}: {str(e)}")
