@@ -30,7 +30,7 @@ celery.conf.update(
 
 # This task downloads the file from Azure (if needed) and extracts document details.
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
-def extraction_task(self, blob_url, file_type, file_id):
+def extraction_task(self, user_id, blob_url, file_type, file_id):
     """
     Downloads the file from Azure (if needed) and extracts document details.
     Returns parsed details as a Python object.
@@ -51,7 +51,7 @@ def extraction_task(self, blob_url, file_type, file_id):
         download_blob_to_tempfile(blob_url, local_path)
 
         # 3) Perform extraction
-        details_str = read_and_extract_document(local_path, file_type)
+        details_str = read_and_extract_document(user_id, local_path, file_type)
 
         # 4) Clean up local copy after extraction
         os.remove(local_path)
@@ -67,8 +67,6 @@ def extraction_task(self, blob_url, file_type, file_id):
     except Exception as exc:
         logging.exception(f"Extraction failed: {exc}")
         raise self.retry(exc=exc)
-
-
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def process_pages_task(self, details, user_id, user_uuid, file_info):

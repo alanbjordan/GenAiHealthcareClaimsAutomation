@@ -35,7 +35,7 @@ def worker_process_diagnosis(diagnosis, user_id, file_id, page_number, date_of_v
             print(f"Combined text for embedding: {combined_text.strip()}")
             
             try:
-                process_condition_embedding(condition_id, combined_text, new_condition, session)
+                process_condition_embedding(user_id, condition_id, combined_text, session)
             except Exception as e:
                 logging.error(
                     f"Failed to generate or assign embedding for condition_id {condition_id}: {str(e)}"

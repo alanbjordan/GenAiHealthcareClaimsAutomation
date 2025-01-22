@@ -41,7 +41,6 @@ def remove_session(exception=None):
     else:
         t = log_with_timing(t, "[TEARDOWN_REQUEST] No session found.")
 
-
 ### CHANGED: Remove all token-based logic and define a new function for user_uuid header.
 
 def get_user_uuid_from_request(request):
@@ -52,7 +51,6 @@ def get_user_uuid_from_request(request):
         return None, "user-uuid header is required."
     t = log_with_timing(t, f"[get_user_uuid_from_request] user_uuid found: {user_uuid}")
     return user_uuid, None
-
 
 @decision_bp.route('/user_decision_save', methods=['GET', 'POST'])
 def user_decision_save():
@@ -168,7 +166,7 @@ def structured_summarize_bva_decision():
 
     try:
         t = log_with_timing(t, f"[structured_summarize_bva_decision] Calling structured_summarize_bva_decision_llm(...)")
-        structured_data = structured_summarize_bva_decision_llm(decision_citation, full_text)
+        structured_data = structured_summarize_bva_decision_llm(user.user_id, decision_citation, full_text)
         t = log_with_timing(t, f"[structured_summarize_bva_decision] Received structured_data.")
     except Exception as e:
         t = log_with_timing(t, f"[structured_summarize_bva_decision][ERROR] Error extracting structured summary: {e}")
