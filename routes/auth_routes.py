@@ -107,8 +107,8 @@ def decode_jwt_no_verify(token_str):
     return jwt.decode(token_str, options={"verify_signature": False, "verify_exp": False})
 
 # ----- Login Endpoint -----
-@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
-@pre_authorized_cors_preflight
+@auth_bp.route('/login', methods=['POST','OPTIONS']) # add/REMOVE OPTIONS back when ready for production/DEVELOPMENT
+@pre_authorized_cors_preflight # add this back / REMOVE when ready for production / DEVELOPMENT
 def login():
     data = request.get_json()
     logging.debug('Received login request with data: %s', data)

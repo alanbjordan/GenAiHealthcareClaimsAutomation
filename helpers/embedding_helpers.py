@@ -31,7 +31,7 @@ def find_top_tags(session, embedding_vector: list, top_n: int = 2):
     return similar_tags
 
 
-def process_condition_embedding(condition_id, combined_text, new_condition, session):
+def process_condition_embedding(user_id, condition_id, combined_text, new_condition, session):
     """
     Generates an embedding for the given condition, stores it, and associates top tags based on similarity.
 
@@ -46,7 +46,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
     try:
         new_condition = session.merge(new_condition)
         # Generate the embedding vector
-        embedding_vector = generate_embedding(combined_text.strip())
+        embedding_vector = generate_embedding(user_id, combined_text.strip())
         logging.info(f"Generated embedding for condition_id {condition_id}")
         print(f"Generated embedding for condition_id {condition_id}")
 
@@ -62,6 +62,7 @@ def process_condition_embedding(condition_id, combined_text, new_condition, sess
 
             # Perform similarity search to find top tags
             top_tags_with_distance = find_top_tags(session, embedding_vector, top_n=1)
+            new_condition = session.merge(new_condition)
 
             if top_tags_with_distance:
                 top_tag, distance = top_tags_with_distance[0]
