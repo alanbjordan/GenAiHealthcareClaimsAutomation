@@ -144,7 +144,7 @@ def upload():
             # the file_type, user and file info, etc.
 
             # 5. Build a Celery chain
-            extraction = extraction_task.s(blob_url, file_type, file_id)
+            extraction = extraction_task.s(user.user_id,blob_url, file_type, file_id)
             processing = process_pages_task.s(
                 user_id=user.user_id,
                 user_uuid=user_uuid,

@@ -22,17 +22,24 @@ class Users(db.Model):
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
     user_uuid = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
 
+    # New Fields for Credits
+    credits_remaining = db.Column(db.Integer, nullable=False, default=0)
+    total_tokens_used = db.Column(db.Integer, nullable=False, default=0)
+
     # Relationships
     service_periods = db.relationship('ServicePeriod', back_populates='user', cascade="all, delete-orphan", lazy='select')
     files = db.relationship('File', back_populates='user', cascade="all, delete-orphan", lazy='select')
     conditions = db.relationship('Conditions', back_populates='user', cascade="all, delete-orphan", lazy='select')
-    saved_decisions = db.relationship('UserDecisionSaves', back_populates='user', cascade="all, delete-orphan", lazy='select')  # New relationship
+    saved_decisions = db.relationship('UserDecisionSaves', back_populates='user', cascade="all, delete-orphan", lazy='select')
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f"<Users user_id={self.user_id} email={self.email}>"
 
 
 class File(db.Model):
@@ -182,3 +189,87 @@ class RefreshToken(db.Model):
 
     # Relationship back to the Users model
     user = db.relationship('Users', backref='refresh_tokens', lazy='select')
+
+class SubscriptionPlan(db.Model):
+    __tablename__ = 'subscription_plans'
+
+    plan_id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), unique=True, nullable=False)
+    monthly_credits = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Numeric(10, 2), nullable=False)  # Monthly subscription fee
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user_subscriptions = db.relationship(
+        'UserSubscription',
+        back_populates='plan',
+        cascade="all, delete-orphan",
+        lazy='select'
+    )
+
+    def __repr__(self):
+        return f"<SubscriptionPlan {self.name}>"
+    
+class TokenBundlePurchase(db.Model):
+    __tablename__ = 'token_bundles'
+
+    purchase_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    bundle_type_id = db.Column(db.Integer, db.ForeignKey('token_bundle_catalog.bundle_type_id', ondelete='RESTRICT'), nullable=False)
+    purchase_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    final_price = db.Column(db.Numeric(10, 2), nullable=False)
+    # Optional: store the tokens actually added, in case you override the default
+    tokens_added = db.Column(db.Integer, nullable=False)
+
+    def __repr__(self):
+        return f"<TokenBundlePurchase id={self.purchase_id} user_id={self.user_id}>"
+
+class TokenBundleCatalog(db.Model):
+    __tablename__ = 'token_bundle_catalog'
+
+    bundle_type_id = db.Column(db.Integer, primary_key=True)
+    tokens = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Numeric(10, 2), nullable=False)
+    description = db.Column(db.String(255), nullable=True)  # Optional
+
+    def __repr__(self):
+        return f"<TokenBundleCatalog id={self.bundle_type_id} tokens={self.tokens}>"
+
+class UserSubscription(db.Model):
+    __tablename__ = 'user_subscriptions'
+
+    subscription_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    plan_id = db.Column(db.Integer, db.ForeignKey('subscription_plans.plan_id', ondelete='RESTRICT'), nullable=False)
+    start_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    end_date = db.Column(db.DateTime, nullable=True)      # For canceled or expired subscriptions
+    status = db.Column(db.String(50), default='active', nullable=False)  # e.g., 'active', 'canceled', etc.
+    next_billing_date = db.Column(db.DateTime, nullable=True)            # When to bill again
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # Relationships
+    #user = db.relationship('Users', back_populates='user_subscriptions', lazy='select')
+    plan = db.relationship('SubscriptionPlan', back_populates='user_subscriptions', lazy='select')
+
+    def __repr__(self):
+        return f"<UserSubscription subscription_id={self.subscription_id} user_id={self.user_id} plan_id={self.plan_id}>"
+
+class OpenAIUsageLog(db.Model):
+    __tablename__ = 'openai_usage_logs'
+
+    usage_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    model = db.Column(db.String(255), nullable=False)
+    prompt_tokens = db.Column(db.Integer, nullable=False, default=0)
+    completion_tokens = db.Column(db.Integer, nullable=False, default=0)
+    total_tokens = db.Column(db.Integer, nullable=False, default=0)
+    cost = db.Column(db.Numeric(10, 2), nullable=False, default=0.00)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Optional relationship back to Users
+    user = db.relationship('Users', backref='openai_usage_logs', lazy='select')
+
+    def __repr__(self):
+        return f"<OpenAIUsageLog usage_id={self.usage_id} user_id={self.user_id} model={self.model}>"

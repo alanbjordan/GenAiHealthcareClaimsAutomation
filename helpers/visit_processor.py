@@ -1,3 +1,5 @@
+#  visit_processor.py is a helper module that processes a single visit, including its diagnoses.
+
 import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
