@@ -46,6 +46,11 @@ def chat():
         if not user:
             print(f"Invalid user UUID: {user_uuid}")
             return jsonify({"error": "Invalid user UUID"}), 404
+        
+        # 3a) Look up the user credits in the DB and block if not enough
+        if user.credits_remaining <= 0:
+            return jsonify({"error": "You do not have enough credits to continue this conversation. Please visit your account and purchase more credits."}), 403
+
 
         # Retrieve the user_id (and optionally first/last name, email, etc.)
         db_user_id = user.user_id

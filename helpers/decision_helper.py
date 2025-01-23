@@ -3,7 +3,7 @@ from openai import OpenAI
 from pydantic import ValidationError
 from dotenv import load_dotenv
 from models.decision_models import BvaDecisionStructuredSummary
-from llm_wrappers import call_openai_chat_parse
+from helpers.llm_wrappers import call_openai_chat_parse
 
 # Load environment variables from a .env file
 load_dotenv()
