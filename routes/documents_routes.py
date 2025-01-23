@@ -44,6 +44,8 @@ from config import Config
 from helpers.upload.validation_helper import validate_and_setup_request
 from helpers.upload.usr_svcp_helpers import get_user_and_service_periods
 from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid
+from celery import chain
+from helpers.upload.upload_logic import can_user_afford_files
 
 # Import your Celery tasks
 from celery_app import extraction_task, process_pages_task, finalize_task
@@ -72,6 +74,22 @@ def upload():
         if error_response:
             return user_lookup_result  # Early exit if user lookup fails
         user, service_periods = user_lookup_result
+
+        # 2a) **Check credits** for all uploaded files:
+        try:
+            affordable, total_pages, required_credits = can_user_afford_files(user, uploaded_files)
+        except ValueError as ve:
+            return jsonify({"error": str(ve)}), 400
+        except Exception as e:
+            return jsonify({"error": f"Could not count pages: {str(e)}"}), 500
+
+        if not affordable:
+            return jsonify({
+                "error": (
+                    f"You need at least {required_credits} credits to process {total_pages} page(s). "
+                    f"You have {user.credits_remaining} credits remaining."
+                )
+            }), 403
 
         # This will store info about each file we process
         uploaded_urls = []
