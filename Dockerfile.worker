@@ -1,0 +1,42 @@
+# Dockerfile.worker
+
+# Step 1: Base image
+FROM python:3.9-slim
+
+# Step 2: Install system packages (same as your main Dockerfile)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    libssl-dev \
+    swig \
+    poppler-utils \
+    tesseract-ocr \
+ && rm -rf /var/lib/apt/lists/*
+
+# Step 3: Create and use working directory
+WORKDIR /app
+
+# Step 4: Copy your requirements file into /app
+COPY requirements.txt /app/
+
+# Step 5: Install Python dependencies
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
+
+# (Optional) If you installed extra packages in your main Dockerfile, repeat here
+RUN pip install --upgrade openai
+RUN pip install --upgrade pinecone-client
+RUN pip install --upgrade chardet
+RUN pip install --upgrade celery
+
+
+# Step 6: Copy the rest of your code
+COPY . /app/
+
+# Step 7: Expose a port if needed (often not necessary for a worker)
+# EXPOSE 5000
+
+# Step 8: Command to start the Celery worker
+# Replace "my_celery_app" with wherever your Celery instance is defined, e.g., "my_app.celery" or similar
+CMD ["celery", "-A", "celery_app", "worker", "--loglevel=INFO"]

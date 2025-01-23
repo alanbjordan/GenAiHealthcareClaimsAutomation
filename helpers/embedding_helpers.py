@@ -10,7 +10,7 @@ from models.sql_models import ConditionEmbedding
 from helpers.llm_helpers import generate_embedding
 
 
-MAX_COSINE_DISTANCE = .559
+MAX_COSINE_DISTANCE = .65
 
 
 def find_top_tags(session, embedding_vector: list, top_n: int = 2):
