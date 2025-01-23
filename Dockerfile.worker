@@ -29,7 +29,7 @@ RUN pip install --upgrade openai
 RUN pip install --upgrade pinecone-client
 RUN pip install --upgrade chardet
 RUN pip install --upgrade celery
-
+RUN pip install --upgrade PyPDF2
 
 # Step 6: Copy the rest of your code
 COPY . /app/

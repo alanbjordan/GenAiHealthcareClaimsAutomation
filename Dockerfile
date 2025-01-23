@@ -25,6 +25,8 @@ RUN pip install -r requirements.txt
 RUN pip install --upgrade openai
 RUN pip install --upgrade pinecone-client
 RUN pip install --upgrade chardet
+RUN pip install --upgrade PyPDF2
+
 # Step 5: copy the rest of your code
 COPY . /app/
 
