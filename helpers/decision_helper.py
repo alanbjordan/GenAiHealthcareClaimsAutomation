@@ -2,7 +2,8 @@ import os
 from openai import OpenAI
 from pydantic import ValidationError
 from dotenv import load_dotenv
-from models.decision_models import *
+from models.decision_models import BvaDecisionStructuredSummary
+from helpers.llm_wrappers import call_openai_chat_parse
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -25,25 +26,38 @@ Ensure that all fields are present and correctly formatted.
 Use ISO 8601 format for dates (YYYY-MM-DD).
 '''
 
-def summarize_decision(document_text):
+def summarize_decision(document_text: str, user_id: int) -> BvaDecisionStructuredSummary:
     """
     Summarize a BVA decision text into a BvaDecisionStructuredSummary,
-    ensuring all fields are present by using required fields in the Pydantic model.
+    ensuring all fields are present by using the Pydantic model.
+    Logs usage data and updates user credits via the call_openai_chat_parse wrapper.
     """
+    from decimal import Decimal
+
+    # Define your cost constants for prompt and completion tokens
+    # (These may be different from your main app usage costs if needed)
+    cost_per_prompt_token = Decimal("0.0000025")       # e.g., $2.50 per 1M tokens
+    cost_per_completion_token = Decimal("0.00001")     # e.g., $10.00 per 1M tokens
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": document_text},
+    ]
+
     try:
-        # Request the model to output JSON matching the Pydantic model
-        completion = client.beta.chat.completions.parse(
+        # 1) Call the wrapper for parse-based completion
+        response = call_openai_chat_parse(
+            user_id=user_id,
             model="gpt-4o-2024-08-06",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": document_text},
-            ],
+            messages=messages,
             response_format=BvaDecisionStructuredSummary,
             temperature=0.2,
+            cost_per_prompt_token=cost_per_prompt_token,
+            cost_per_completion_token=cost_per_completion_token,
         )
 
-        # The API should return a JSON string matching the schema
-        information = completion.choices[0].message.parsed
+        # 2) Extract the parsed content from the response
+        information = response.choices[0].message.parsed
         return information
 
     except ValidationError as ve:
@@ -52,4 +66,3 @@ def summarize_decision(document_text):
     except Exception as ex:
         print(f"An unexpected error occurred: {ex}")
         return None
-

@@ -21,6 +21,7 @@ def call_openai_chat_create(
     """
     Wrapper for client.chat.completions.create(...) that logs usage in openai_usage_logs
     and updates the user's cost/credits.
+    Blocks call if user does not have enough credits.
     """
     db_session = ScopedSession()
     try:
@@ -28,6 +29,10 @@ def call_openai_chat_create(
         user = db_session.query(Users).filter_by(user_id=user_id).first()
         if not user:
             raise ValueError(f"User not found (user_id={user_id}).")
+        
+        # 1a) Check user credits
+        if user.credits_remaining <= 0:
+            raise ValueError("User does not have enough credits to proceed.")
 
         # 2) Call the OpenAI ChatCompletion endpoint
         response = client.chat.completions.create(
@@ -81,6 +86,7 @@ def call_openai_chat_create(
     finally:
         db_session.close()
 
+
 def call_openai_embeddings(
     user_id: int,
     input_text: str,
@@ -91,10 +97,11 @@ def call_openai_embeddings(
     """
     A wrapper for client.embeddings.create(...) that:
       1) Looks up the user
-      2) Calls the OpenAI embeddings endpoint
-      3) Logs usage info in openai_usage_logs
-      4) Updates user credits/cost
-      5) Returns the raw response
+      2) Blocks call if user has insufficient credits
+      3) Calls the OpenAI embeddings endpoint
+      4) Logs usage info in openai_usage_logs
+      5) Updates user credits/cost
+      6) Returns the raw response
     """
     db_session = ScopedSession()
     try:
@@ -102,6 +109,10 @@ def call_openai_embeddings(
         user = db_session.query(Users).filter_by(user_id=user_id).first()
         if not user:
             raise ValueError(f"User not found (user_id={user_id}).")
+
+        # 1a) Check user credits
+        if user.credits_remaining <= 0:
+            raise ValueError("User does not have enough credits to proceed.")
 
         # 2) Make the embeddings call
         response = client.embeddings.create(
@@ -146,6 +157,7 @@ def call_openai_embeddings(
     finally:
         db_session.close()
 
+
 def call_openai_chat_parse(
     user_id: int,
     model: str,
@@ -158,6 +170,7 @@ def call_openai_chat_parse(
     """
     A wrapper for client.beta.chat.completions.parse(...)
     Logs usage in openai_usage_logs and updates user’s credits or balance.
+    Blocks call if user does not have enough credits.
     """
     db_session = ScopedSession()
     try:
@@ -165,6 +178,10 @@ def call_openai_chat_parse(
         user = db_session.query(Users).filter_by(user_id=user_id).first()
         if not user:
             raise ValueError(f"User not found (user_id={user_id}).")
+
+        # 1a) Check user credits
+        if user.credits_remaining <= 0:
+            raise ValueError("User does not have enough credits to proceed.")
 
         # 2) Make the parse call
         response = client.beta.chat.completions.parse(

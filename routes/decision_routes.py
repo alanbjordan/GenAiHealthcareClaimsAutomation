@@ -7,6 +7,7 @@ from config import Config
 import jwt  # We likely don't need this import anymore if token-based logic is removed
 from datetime import datetime
 from helpers.llm_helpers import structured_summarize_bva_decision_llm
+from helpers.decision_helper import summarize_decision
 
 decision_bp = Blueprint('decision_bp', __name__)
 
@@ -211,3 +212,81 @@ def get_all_user_decisions():
 
     t = log_with_timing(t, "[get_all_user_decisions] Returning saved decisions.")
     return jsonify({"saved_decisions": decisions_data}), 200
+
+###############################################################################
+# summarize_decision
+###############################################################################
+@decision_bp.route('/summarize_decision', methods=['POST','OPTIONS'])
+def summarize_decision_route():
+    """
+    Route to summarize a BVA decision text.
+    Expects JSON payload with 'decision_text'.
+    Returns a structured summary as per BvaDecisionStructuredSummary model.
+    """
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        print("[DEBUG] /summarize_decision: Handling OPTIONS preflight.")
+        response = jsonify({"message": "CORS preflight successful"})
+        response.headers.update({
+            "Access-Control-Allow-Origin": Config.CORS_ORIGINS,
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, user-uuid",
+            "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
+            "Access-Control-Allow-Credentials": "true"
+        })
+        return response, 200
+
+    print("[DEBUG] /summarize_decision: Entered POST method.")
+    try:
+        # 1) Get user_uuid from request
+        user_uuid, error = get_user_uuid_from_request(request)
+        print(f"[DEBUG] user_uuid from request: {user_uuid}, error: {error}")
+        if error:
+            print("[DEBUG] Missing or invalid user_uuid.")
+            return jsonify({"error": error}), 400
+
+        # 2) Look up user
+        print("[DEBUG] Querying database for user...")
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
+        if not user:
+            print("[DEBUG] User not found for given user_uuid.")
+            return jsonify({"error": "Invalid user UUID"}), 404
+
+        print(f"[DEBUG] Found user_id={user.user_id}, credits_remaining={user.credits_remaining}")
+
+        # 3) Check that the user has at least 10,000 credits
+        if user.credits_remaining < 10000:
+            print("[DEBUG] User does NOT have enough credits.")
+            return jsonify({"error": f"You need at least 10,000 credits to summarize this decision. You have {user.credits_remaining} credits remaining, please add more credits to your account."}), 403
+
+        print("[DEBUG] User has enough credits. Proceeding...")
+
+        # 4) Parse JSON for the decision_text
+        data = request.json
+        if not data:
+            print("[DEBUG] No JSON body in request.")
+            return jsonify({"error": "Missing JSON body"}), 400
+
+        decision_text = data.get('decision_text')
+        if not decision_text:
+            print("[DEBUG] No 'decision_text' field in JSON.")
+            return jsonify({"error": "decision_text is required"}), 400
+
+        print("[DEBUG] Received /summarize_decision request with valid user and data.")
+
+        # 5) Call the summarize_decision helper with user_id
+        print("[DEBUG] Calling summarize_decision helper now...")
+        structured_summary = summarize_decision(decision_text, user.user_id)
+
+        if not structured_summary:
+            print("[DEBUG] summarize_decision returned None. Possibly ValidationError or other issue.")
+            return jsonify({"error": "Failed to generate structured summary."}), 500
+
+        # 6) Return the structured summary in JSON form
+        print("[DEBUG] summarize_decision succeeded. Returning structured_summary.")
+        return jsonify(structured_summary.dict()), 200
+
+    except Exception as e:
+        print("Error in summarizing decision:", e)
+        import traceback
+        traceback.print_exc()  # Print full traceback for debugging
+        return jsonify({"error": "Failed to process request."}), 500
