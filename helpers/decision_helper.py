@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from dotenv import load_dotenv
 from models.decision_models import BvaDecisionStructuredSummary
 from helpers.llm_wrappers import call_openai_chat_parse
+from decimal import Decimal 
 
 # Load environment variables from a .env file
 load_dotenv()
@@ -15,24 +16,22 @@ client = OpenAI(
 if not client:
     raise ValueError("Please set the VA_AUTOMATION_API_KEY environment variable.")
 
-# Define the system prompt
-system_prompt = '''
-You are an assistant specialized in extracting structured information from Board of Veterans' Appeals (BVA) decision texts. Your task is to accurately identify and extract specific details from the provided legal decision text and present them in a JSON format that aligns precisely with the BvaDecisionStructuredSummary model.
-
-Important: Provide a concise explanation in each field. Use title case for all names
-
-For any field where no information is found, fill in the value with the string "no Field Name found" for example no date found in the date field.
-Ensure that all fields are present and correctly formatted.
-Use ISO 8601 format for dates (YYYY-MM-DD).
-'''
-
 def summarize_decision(document_text: str, user_id: int) -> BvaDecisionStructuredSummary:
     """
     Summarize a BVA decision text into a BvaDecisionStructuredSummary,
     ensuring all fields are present by using the Pydantic model.
     Logs usage data and updates user credits via the call_openai_chat_parse wrapper.
     """
-    from decimal import Decimal
+    # Define the system prompt
+    system_prompt = '''
+    You are an assistant specialized in extracting structured information from Board of Veterans' Appeals (BVA) decision texts. Your task is to accurately identify and extract specific details from the provided legal decision text and present them in a JSON format that aligns precisely with the BvaDecisionStructuredSummary model.
+
+    Important: Provide a concise explanation in each field. Use title case for all names
+
+    For any field where no information is found, fill in the value with the string "no Field Name found" for example no date found in the date field.
+    Ensure that all fields are present and correctly formatted.
+    Use ISO 8601 format for dates (YYYY-MM-DD). Use a list format for multiple items where applicable. Use bold for emphasis where needed. Make sure its structured and easy to read.
+    '''
 
     # Define your cost constants for prompt and completion tokens
     # (These may be different from your main app usage costs if needed)
