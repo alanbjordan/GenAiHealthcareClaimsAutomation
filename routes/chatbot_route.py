@@ -49,7 +49,7 @@ def chat():
         
         # 3a) Look up the user credits in the DB and block if not enough
         if user.credits_remaining <= 0:
-            return jsonify({"error": "You do not have enough credits to continue this conversation. Please visit your account and purchase more credits."}), 403
+            return jsonify({"error": f"You do not have enough credits to continue this conversation. Your credit balance is {user.credits_remaining}. Please visit your account and purchase more credits."}), 403
 
 
         # Retrieve the user_id (and optionally first/last name, email, etc.)
@@ -84,10 +84,17 @@ def chat():
             system_msg=system_message  # <--- pass here
         )
 
+        # Now re-query the user so we get a fresh user object *still attached* to g.session
+        updated_user = g.session.query(Users).filter_by(user_id=db_user_id).first()
+        if not updated_user:
+            # handle edge case: user got deleted somehow
+            return jsonify({"error": "User record not found after update."}), 404
+        
         # 7) Return the assistant response
         response_data = {
             "assistant_message": result["assistant_message"],
-            "thread_id": result["thread_id"]
+            "thread_id": result["thread_id"],
+            "credits_remaining": updated_user.credits_remaining
         }
         return jsonify(response_data), 200
 

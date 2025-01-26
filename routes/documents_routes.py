@@ -93,7 +93,8 @@ def upload():
 
         # This will store info about each file we process
         uploaded_urls = []
-
+        
+        
         # Process each uploaded file
         for uploaded_file in uploaded_files:
             if uploaded_file.filename == '':
