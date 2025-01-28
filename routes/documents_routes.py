@@ -98,6 +98,7 @@ def upload():
 
         # ------------------------------------------------
         # 2b) **Check credits** using the local temp files
+        # create a list of temp file paths for each uploaded file
         # ------------------------------------------------
         try:
             affordable, total_pages, required_credits = can_user_afford_files(user, temp_file_paths)
