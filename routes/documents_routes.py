@@ -75,15 +75,45 @@ def upload():
             return user_lookup_result  # Early exit if user lookup fails
         user, service_periods = user_lookup_result
 
-        # 2a) **Check credits** for all uploaded files:
+        # ------------------------------------------------
+        # 2a) First, save all uploaded files to temp paths
+        #     so we can do page-count logic below.
+        # ------------------------------------------------
+        temp_file_paths = []
+        for uploaded_file in uploaded_files:
+            if uploaded_file.filename == '':
+                logging.error("No selected file in the upload")
+                print("No selected file in the upload")
+                return jsonify({"error": "No selected file"}), 400
+
+            temp_file_path = os.path.join(
+                tempfile.gettempdir(),
+                secure_filename(uploaded_file.filename)
+            )
+            uploaded_file.save(temp_file_path)
+
+            logging.info(f"Saved file '{uploaded_file.filename}' to temp path '{temp_file_path}'")
+            print(f"Saved file '{uploaded_file.filename}' to temp path '{temp_file_path}'")
+            temp_file_paths.append(temp_file_path)
+
+        # ------------------------------------------------
+        # 2b) **Check credits** using the local temp files
+        # ------------------------------------------------
         try:
-            affordable, total_pages, required_credits = can_user_afford_files(user, uploaded_files)
+            affordable, total_pages, required_credits = can_user_afford_files(user, temp_file_paths)
         except ValueError as ve:
             return jsonify({"error": str(ve)}), 400
         except Exception as e:
             return jsonify({"error": f"Could not count pages: {str(e)}"}), 500
 
         if not affordable:
+            # If user cannot afford them, remove temp files and return error
+            for path in temp_file_paths:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+
             return jsonify({
                 "error": (
                     f"You need at least {required_credits} credits to process {total_pages} page(s). "
@@ -93,14 +123,13 @@ def upload():
 
         # This will store info about each file we process
         uploaded_urls = []
-        
-        
-        # Process each uploaded file
-        for uploaded_file in uploaded_files:
-            if uploaded_file.filename == '':
-                logging.error("No selected file in the upload")
-                print("No selected file in the upload")
-                return jsonify({"error": "No selected file"}), 400
+
+        # ------------------------------------------------
+        # 3) Now that we know user can afford them,
+        #    process each temp file: upload to Azure, DB, etc.
+        # ------------------------------------------------
+        for i, uploaded_file in enumerate(uploaded_files):
+            temp_file_path = temp_file_paths[i]
 
             # Determine file type based on extension
             file_extension = os.path.splitext(uploaded_file.filename)[1].lower()
@@ -117,23 +146,15 @@ def upload():
             logging.info(f"Determined file type '{file_type}' for extension '{file_extension}'")
             print(f"Determined file type '{file_type}' for extension '{file_extension}'")
 
-            # Save to a local temp file
-            temp_file_path = os.path.join(tempfile.gettempdir(), secure_filename(uploaded_file.filename))
-            uploaded_file.save(temp_file_path)
-            logging.info(f"Saved uploaded file to temporary path: {temp_file_path}")
-            print(f"Saved uploaded file to temporary path: {temp_file_path}")
-
-            # For demonstration, assume your app’s logic sets `category` to “Unclassified”.
-            # Adjust as needed to match your real category-determination logic.
             category = 'Unclassified'
 
-            # 3. Upload file to Azure
+            # 3a) Upload file to Azure
             blob_name = f"{user_uuid}/{category}/{uploaded_file.filename}"
             blob_url = upload_file_to_azure(temp_file_path, blob_name)
             logging.info(f"Uploaded file to Azure Blob Storage: {blob_url}")
             print(f"Uploaded file to Azure Blob Storage: {blob_url}")
 
-            # 4. Create a File record in the DB (status = "Processing" if you want)
+            # 3b) Create DB record
             new_file = File(
                 user_id=user.user_id,
                 file_name=uploaded_file.filename,
@@ -148,22 +169,13 @@ def upload():
             g.session.add(new_file)
             g.session.flush()  # get new_file.file_id
             file_id = new_file.file_id
-
-            # Commit so the File record is in DB before tasks start
             g.session.commit()
 
             logging.info(f"Inserted new file record with file_id={file_id}")
             print(f"Inserted new file record with file_id={file_id}")
 
-            # 5. Build a Celery chain: 
-            #    extraction_task -> process_pages_task -> finalize_task
-            #
-            # We'll pass the necessary info to each subsequent task. 
-            # In this example, we pass the blob_url (where the file is stored),
-            # the file_type, user and file info, etc.
-
-            # 5. Build a Celery chain
-            extraction = extraction_task.s(user.user_id,blob_url, file_type, file_id)
+            # 3c) Kick off Celery chain (extraction -> process_pages -> finalize)
+            extraction = extraction_task.s(user.user_id, blob_url, file_type, file_id)
             processing = process_pages_task.s(
                 user_id=user.user_id,
                 user_uuid=user_uuid,
@@ -174,25 +186,22 @@ def upload():
             )
             finalization = finalize_task.s(user.user_id, file_id)
 
-            # Apply the chain
             chain_result = (extraction | processing | finalization)()
-
-            # Capture task IDs for tracking
             task_ids = {
                 'extraction_task_id': extraction.freeze().id,
                 'processing_task_id': processing.freeze().id,
                 'finalization_task_id': finalization.freeze().id,
-                'chain_task_id': chain_result.id  # Overall chain ID
+                'chain_task_id': chain_result.id
             }
 
             uploaded_urls.append({
                 'category': category,
                 "fileName": uploaded_file.filename,
                 "blobUrl": blob_url,
-                "task_ids": task_ids  # for tracking
+                "task_ids": task_ids
             })
 
-            # Clean up local temp file
+            # 3d) Clean up local temp file
             try:
                 os.remove(temp_file_path)
                 logging.info(f"Temporary file {temp_file_path} removed successfully.")
@@ -206,13 +215,17 @@ def upload():
         print(f">>>>>>>>>>>>>>>>>>>>PROCESSING TIME (queuing tasks): {elapsed_time}<<<<<<<<<<<<<<<<<<<<<<")
 
         # Return response immediately, while tasks run in background
-        return jsonify({"message": "File(s) uploaded and processing started", "files": uploaded_urls}), 202
+        return jsonify({
+            "message": "File(s) uploaded and processing started",
+            "files": uploaded_urls
+        }), 202
 
     except Exception as e:
         g.session.rollback()
         logging.exception(f"Upload failed: {str(e)}")
         print(f"Upload failed: {str(e)}")
         return jsonify({"error": "Failed to upload file"}), 500
+
 
 @document_bp.route('/documents', methods=['OPTIONS', 'GET', 'POST', 'PUT'])
 def get_documents():
