@@ -13,7 +13,7 @@ from helpers.azure_helpers import download_blob_to_tempfile
 from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid, File
 from helpers.visit_processor import process_visit
 
-# Example: "redis://localhost:6379/0" or use your actual Redis connection string
+# Example: "redis://localhost:6379/0" or use your actual Redis connection string with password
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'rediss://:e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=@vaclaimguard.redis.cache.windows.net:6380/0')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
