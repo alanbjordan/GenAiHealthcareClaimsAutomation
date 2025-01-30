@@ -431,9 +431,9 @@ def continue_conversation(
 
                     elif function_name == "list_user_conditions":
                         from .chatbot_helper import list_user_conditions
-                        args = json.loads(function_args)
-                        user_id_arg = args["user_id"]
-                        result_str = list_user_conditions(user_id_arg)
+                        #args = json.loads(function_args)
+                        #user_id_arg = args["user_id"]
+                        result_str = list_user_conditions(user_id)
                         tool_outputs.append({
                             "tool_call_id": call.id,
                             "output": result_str
@@ -441,9 +441,9 @@ def continue_conversation(
 
                     elif function_name == "list_nexus_conditions":
                         from .chatbot_helper import list_nexus_conditions
-                        args = json.loads(function_args)
-                        user_id_arg = args["user_id"]
-                        result_str = list_nexus_conditions(user_id_arg)
+                        #args = json.loads(function_args)
+                        #user_id_arg = args["user_id"]
+                        result_str = list_nexus_conditions(user_id)
                         tool_outputs.append({
                             "tool_call_id": call.id,
                             "output": result_str
@@ -453,11 +453,11 @@ def continue_conversation(
                     elif function_name == "semantic_search_user_conditions":
                         from .chatbot_helper import semantic_search_user_conditions
                         args = json.loads(function_args)
-                        user_id_arg = args["user_id"]
+                        #user_id_arg = args["user_id"]
                         query_txt = args["query_text"]
                         limit_arg = args.get("limit", 10)
                         result_str = semantic_search_user_conditions(
-                            user_id_arg,
+                            user_id,
                             query_txt,
                             limit_arg
                         )

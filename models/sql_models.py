@@ -31,6 +31,12 @@ class Users(db.Model):
     files = db.relationship('File', back_populates='user', cascade="all, delete-orphan", lazy='select')
     conditions = db.relationship('Conditions', back_populates='user', cascade="all, delete-orphan", lazy='select')
     saved_decisions = db.relationship('UserDecisionSaves', back_populates='user', cascade="all, delete-orphan", lazy='select')
+    chat_threads = db.relationship(
+    'ChatThread',
+    back_populates='user',
+    cascade="all, delete-orphan",
+    lazy='select'
+)
 
     def set_password(self, password):
         self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
@@ -273,3 +279,29 @@ class OpenAIUsageLog(db.Model):
 
     def __repr__(self):
         return f"<OpenAIUsageLog usage_id={self.usage_id} user_id={self.user_id} model={self.model}>"
+
+class ChatThread(db.Model):
+    __tablename__ = 'chat_threads'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # A unique ID for your frontend/client to reference
+    thread_id = db.Column(db.String(64), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    user = db.relationship('Users', back_populates='chat_threads', lazy='select')
+    messages = db.relationship('ChatMessage', back_populates='thread', cascade='all, delete-orphan', lazy='select')
+
+
+class ChatMessage(db.Model):
+    __tablename__ = 'chat_messages'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    thread_id = db.Column(db.String(64), db.ForeignKey('chat_threads.thread_id', ondelete='CASCADE'), nullable=False)
+    is_bot = db.Column(db.Boolean, default=False, nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationship back to ChatThread
+    thread = db.relationship('ChatThread', back_populates='messages', lazy='select')
