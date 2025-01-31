@@ -2,8 +2,7 @@ az login
 az acr login --name vaclaimguard   
 docker build -t vaclaimguard:latest .
 docker tag vaclaimguard:latest vaclaimguard.azurecr.io/vaclaimguard:latest
-docker push vaclaimguard.azurecr.io/vaclaimguard:latest
-celery -A celery_app.celery worker --loglevel=INFO    
+docker push vaclaimguard.azurecr.io/vaclaimguard:latest 
 az webapp log tail --name vaclaimguard --resource-group VetDox
 
 
