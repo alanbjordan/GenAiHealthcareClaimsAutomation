@@ -305,3 +305,50 @@ class ChatMessage(db.Model):
 
     # Relationship back to ChatThread
     thread = db.relationship('ChatThread', back_populates='messages', lazy='select')
+
+class SupportMessage(db.Model):
+    __tablename__ = 'support_messages'
+
+    support_message_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='SET NULL'), nullable=True)
+    rating = db.Column(db.Integer, nullable=False)
+    issue_type = db.Column(db.String(50), nullable=False, default='general')
+    feedback = db.Column(db.Text, nullable=False)
+
+    first_name = db.Column(db.String(255), nullable=False)
+    last_name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    branch_of_service = db.Column(db.String(255), nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationship back to the Users table
+    user = db.relationship("Users", backref="support_messages", lazy='select')
+
+    def __init__(
+        self,
+        user_id,
+        rating,
+        issue_type,
+        feedback,
+        first_name,
+        last_name,
+        email,
+        branch_of_service
+    ):
+        self.user_id = user_id
+        self.rating = rating
+        self.issue_type = issue_type
+        self.feedback = feedback
+        self.first_name = first_name
+        self.last_name = last_name
+        self.email = email
+        self.branch_of_service = branch_of_service
+
+    def __repr__(self):
+        return (f"<SupportMessage "
+                f"id={self.support_message_id} "
+                f"rating={self.rating} "
+                f"issue={self.issue_type} "
+                f"email={self.email} "
+                f"branch_of_service={self.branch_of_service}>")
