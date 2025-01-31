@@ -19,6 +19,8 @@ from routes.decision_routes import decision_bp
 from routes.marketing_routes import marketing_bp
 from routes.chatbot_route import chatbot_bp
 from routes.credit_routes import credits_bp
+from routes.support_routes import supportbp
+
 
 # Create the app instance
 app = create_app()
@@ -76,6 +78,7 @@ app.register_blueprint(decision_bp)
 app.register_blueprint(marketing_bp)
 app.register_blueprint(chatbot_bp)
 app.register_blueprint(credits_bp)
+app.register_blueprint(supportbp)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
