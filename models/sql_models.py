@@ -2,6 +2,8 @@
 
 from datetime import datetime
 import uuid
+import random
+import string
 
 from database import db, bcrypt
 from pgvector.sqlalchemy import Vector
@@ -314,28 +316,22 @@ class SupportMessage(db.Model):
     rating = db.Column(db.Integer, nullable=False)
     issue_type = db.Column(db.String(50), nullable=False, default='general')
     feedback = db.Column(db.Text, nullable=False)
-
     first_name = db.Column(db.String(255), nullable=False)
     last_name = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), nullable=False)
     branch_of_service = db.Column(db.String(255), nullable=False)
+
+    # Ticket number with a UNIQUE constraint to prevent duplicates
+    ticket_number = db.Column(db.String(30), nullable=False, unique=True)
 
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
 
     # Relationship back to the Users table
     user = db.relationship("Users", backref="support_messages", lazy='select')
 
-    def __init__(
-        self,
-        user_id,
-        rating,
-        issue_type,
-        feedback,
-        first_name,
-        last_name,
-        email,
-        branch_of_service
-    ):
+    def __init__(self, user_id, rating, issue_type, feedback,
+                 first_name, last_name, email, branch_of_service,
+                 ticket_number):
         self.user_id = user_id
         self.rating = rating
         self.issue_type = issue_type
@@ -344,11 +340,8 @@ class SupportMessage(db.Model):
         self.last_name = last_name
         self.email = email
         self.branch_of_service = branch_of_service
+        self.ticket_number = ticket_number
 
     def __repr__(self):
-        return (f"<SupportMessage "
-                f"id={self.support_message_id} "
-                f"rating={self.rating} "
-                f"issue={self.issue_type} "
-                f"email={self.email} "
-                f"branch_of_service={self.branch_of_service}>")
+        return (f"<SupportMessage ticket={self.ticket_number} "
+                f"user={self.user_id} rating={self.rating} issue={self.issue_type}>")
