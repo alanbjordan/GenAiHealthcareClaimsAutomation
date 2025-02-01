@@ -39,7 +39,7 @@ jupyterlab_pygments==0.3.0
 M2Crypto==0.41.0
 MarkupSafe==2.1.5
 mistune==3.0.2
-mkl-service==2.4.0
+mkl-service==2.4.2
 moviepy==1.0.3
 munkres==1.1.4
 nbclient==0.10.0

@@ -9,6 +9,8 @@ node_modules/
 
 # Ignore venv files
 venv/
+ENV/
+.venv/
 
 # Ignore .env file
 .env
@@ -21,3 +23,16 @@ __pycache__/
 
 # Ignore .pyo files
 *.py[cod]
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+NER/
