@@ -8,7 +8,7 @@ import string
 from database import db, bcrypt
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy import Table, Column, Integer, ForeignKey, String, DateTime, func
+from sqlalchemy import Table, Column, Integer, ForeignKey, String, DateTime, func, Text
 
 
 class Users(db.Model):
@@ -345,3 +345,20 @@ class SupportMessage(db.Model):
     def __repr__(self):
         return (f"<SupportMessage ticket={self.ticket_number} "
                 f"user={self.user_id} rating={self.rating} issue={self.issue_type}>")
+    
+class Claims(db.Model):
+    __tablename__ = 'claims'
+
+    claim_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    # Optional: link a claim to a condition if you want to reference it.
+    condition_id = Column(Integer, ForeignKey('conditions.condition_id', ondelete='SET NULL'), nullable=True)
+    claim_name = Column(String(255), nullable=False)
+    status = Column(String(50), nullable=False, default='Draft')  # e.g., Draft, In-Progress, Submitted
+    description = Column(Text, nullable=True)
+    evidence_progress = Column(Integer, nullable=False, default=0)  # Percent complete, e.g., 0-100
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Claims claim_id={self.claim_id} claim_name={self.claim_name}>"
