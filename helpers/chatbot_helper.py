@@ -439,17 +439,6 @@ def continue_conversation(
                             "output": result_str
                         })
 
-                    elif function_name == "list_nexus_conditions":
-                        from .chatbot_helper import list_nexus_conditions
-                        #args = json.loads(function_args)
-                        #user_id_arg = args["user_id"]
-                        result_str = list_nexus_conditions(user_id)
-                        tool_outputs.append({
-                            "tool_call_id": call.id,
-                            "output": result_str
-                        })
-
-
                     elif function_name == "semantic_search_user_conditions":
                         from .chatbot_helper import semantic_search_user_conditions
                         args = json.loads(function_args)

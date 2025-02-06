@@ -1,7 +1,12 @@
+import logging
 from config import Config
 from flask import Blueprint, request, jsonify, g
-from helpers.azure_helpers import download_public_file_from_azure, upload_to_azure_blob
-from helpers.azure_helpers import generate_sas_url, extract_blob_name
+from helpers.azure_helpers import (
+    download_blob_with_credentials,  # Make sure this exists in azure_helpers.py
+    upload_to_azure_blob,
+    generate_sas_url,
+    extract_blob_name
+)
 from helpers.llm_helpers import generate_claim_response, generate_cheat_sheet_response
 from models.sql_models import Users, Conditions, Tag, condition_tags, File
 import fitz  # PyMuPDF
@@ -11,41 +16,32 @@ import os
 from helpers.decision_helper import summarize_decision
 from openai import OpenAI
 
+logger = logging.getLogger(__name__)
+
 # Set up the OpenAI API key to interact with the GPT models
-client = OpenAI(
-    api_key=os.environ.get("OPENAI_API_KEY"),  # Ensure this is set correctly
-)
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 if not client:
     raise ValueError("Please set the VA_AUTOMATION_API_KEY environment variable.")
-
 
 summary_bp = Blueprint('summary_bp', __name__)
 
 ###############################################################################
 # generate_claim_summary
 ###############################################################################
-@summary_bp.route('/generate_claim_summary', methods=['POST', 'OPTIONS'])
+@summary_bp.route('/generate_claim_summary', methods=['POST'])
 def generate_claim_summary():
-    # Handle CORS preflight
-    if request.method == 'OPTIONS':
-        response = jsonify({"message": "CORS preflight successful"})
-        response.headers.update({
-            "Access-Control-Allow-Origin": Config.CORS_ORIGINS,
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, user-uuid",
-            "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
-            "Access-Control-Allow-Credentials": "true"
-        })
-        return response, 200
-
+    """Generates a 'Statement in Support of Claim' PDF based on selected conditions."""
+    logger.debug("Entered generate_claim_summary endpoint.")
     try:
         request_data = request.json
         user_uuid = request_data.get('userUUID')
-        tags = request_data.get('tags')  # Expected: [{"tag_id":..., "condition_ids":[...]}]
+        tags = request_data.get('tags')  # [{"tag_id":..., "condition_ids":[...]}]
 
         if not user_uuid:
+            logger.warning("User UUID missing from request.")
             return jsonify({"error": "User UUID is required"}), 400
 
-        print(f"Received POST /generate_claim_summary request with userUUID: {user_uuid}")
+        logger.info(f"Processing claim summary for userUUID: %s", user_uuid)
 
         # Use the global session
         session = g.session
@@ -53,20 +49,32 @@ def generate_claim_summary():
         # Fetch user by user_uuid
         user = session.query(Users).filter_by(user_uuid=user_uuid).first()
         if not user:
+            logger.warning("No user found for userUUID: %s", user_uuid)
             return jsonify({"error": "User not found"}), 404
+
+        # --- FIX for DetachedInstanceError: store user_id in a local variable ---
+        the_user_id = user.user_id
+        logger.debug("Found user with user_id=%s", the_user_id)
 
         # Flatten condition_ids and tag_ids
         condition_ids = [cid for tag in tags for cid in tag['condition_ids']]
         tag_ids = [tag['tag_id'] for tag in tags]
 
-        # Query conditions filtered by user_id, tag_ids, and condition_ids
-        conditions = (session.query(Conditions, Tag)
-                              .join(condition_tags, Conditions.condition_id == condition_tags.c.condition_id)
-                              .join(Tag, condition_tags.c.tag_id == Tag.tag_id)
-                              .filter(Conditions.user_id == user.user_id,
-                                      Tag.tag_id.in_(tag_ids),
-                                      Conditions.condition_id.in_(condition_ids))
-                              .all())
+        logger.debug("condition_ids=%s, tag_ids=%s", condition_ids, tag_ids)
+
+        # Query conditions
+        conditions = (
+            session.query(Conditions, Tag)
+            .join(condition_tags, Conditions.condition_id == condition_tags.c.condition_id)
+            .join(Tag, condition_tags.c.tag_id == Tag.tag_id)
+            .filter(
+                Conditions.user_id == the_user_id,
+                Tag.tag_id.in_(tag_ids),
+                Conditions.condition_id.in_(condition_ids)
+            )
+            .all()
+        )
+        logger.info("Retrieved %d condition-tag pairs from the DB.", len(conditions))
 
         # Group by disability_name
         results = {}
@@ -86,25 +94,37 @@ def generate_claim_summary():
             }
             results.setdefault(disability_name, []).append(condition_data)
 
-        # Generate summary via LLM
-        claim_summary = generate_claim_response(str(results))
-        print(claim_summary)
+        logger.debug("Grouped results: %s", results)
+
+        # Generate statement content via LLM
+        logger.info("Generating claim response with LLM...")
+        claim_summary = generate_claim_response(
+            the_user_id,      # use the integer ID
+            str(results)      # pass the text content
+        )
+        logger.debug("LLM raw response:\n%s", claim_summary)
 
         # Remove newline chars
         claim_summary = claim_summary.replace('\n', ' ')
+        logger.debug("Normalized claim_summary by removing newlines.")
 
-        # Download the base PDF from a public URL
-        input_pdf_url = (
-            "https://vetdoxstorage.blob.core.windows.net/user-uploads/"
-            "VBA-21-4138-ARE.pdf?sp=r..."
-        )
-        input_pdf_content = download_public_file_from_azure(input_pdf_url)
+        # Download base PDF with credentials
+        # If your PDF is stored in the container as exactly "VBA-21-4138-ARE.pdf":
+        blob_base_pdf = "VBA-21-4138-ARE.pdf"
+        logger.info("Downloading base PDF from Azure container: %s", blob_base_pdf)
+        input_pdf_content = download_blob_with_credentials(blob_base_pdf)
+
         if input_pdf_content is None:
+            logger.error("Failed to download the base PDF from Azure (credentials-based).")
             return jsonify({"error": "Failed to download PDF from Azure"}), 500
 
-        # Load the PDF and overlay text
+        logger.debug("Downloaded PDF. Size in bytes: %d", len(input_pdf_content))
+
+        # Load and modify PDF
         pdf_stream = BytesIO(input_pdf_content)
-        pdf = fitz.open("pdf", pdf_stream)
+        pdf = fitz.open(stream=pdf_stream, filetype="pdf")
+        logger.debug("Loaded PDF with %d pages.", len(pdf))
+
         page = pdf[0]
 
         # Insert text in the PDF
@@ -112,48 +132,58 @@ def generate_claim_summary():
         max_width = 550
         font_size = 10
         line_spacing = int(font_size * 1.5)
-        font = fitz.Font("helv")
         max_height = 260
+        logger.info("Wrapping text onto PDF form fields.")
 
-        wrap_text(page, claim_summary, x, y, max_width, max_height, font_size, line_spacing, font, pdf)
+        try:
+            font = fitz.Font("helv")
+        except Exception as font_exc:
+            logger.warning("Could not load font 'helv': %s. Using default font.", font_exc)
+            font = None
+
+        wrap_text(page, claim_summary, x, y, max_width, max_height,
+                  font_size, line_spacing, font, pdf)
+        logger.debug("Text successfully wrapped onto the PDF.")
 
         # Save modified PDF
         output_pdf_stream = BytesIO()
         pdf.save(output_pdf_stream)
         pdf.close()
         output_pdf_stream.seek(0)
+        logger.debug("PDF modifications complete. Byte size: %d", len(output_pdf_stream.getvalue()))
 
-        # Upload in-memory PDF
+        # Upload final PDF to Azure
         blob_name = f"{user_uuid}/Unclassified/VBA-21-4138-ARE-{datetime.now().date()}.pdf"
+        logger.info("Uploading final PDF to Azure: %s", blob_name)
         uploaded_blob_url = upload_to_azure_blob(
             blob_name,
             None,
             output_pdf_stream.getvalue(),
             content_type="application/pdf"
         )
-
         if uploaded_blob_url is None:
+            logger.error("Failed to upload PDF to Azure.")
             return jsonify({"error": "Failed to upload PDF to Azure"}), 500
 
-        print("Generated SAS URL for the document:", uploaded_blob_url)
+        logger.debug("Uploaded PDF to Azure. Blob URL: %s", uploaded_blob_url)
 
         # Insert file metadata in database
+        logger.info("Inserting new file record into DB.")
         new_file = File(
-            user_id=user.user_id,
-            file_name=f'Statement_in_Support_of_Claim-{datetime.utcnow()}.pdf',
+            user_id=the_user_id,  # use 'the_user_id' instead of user.user_id (detached issues)
+            file_name=f"Statement_in_Support_of_Claim-{datetime.utcnow()}.pdf",
             file_type='pdf',
             file_url=uploaded_blob_url,
             file_date=datetime.now().date(),
             uploaded_at=datetime.utcnow(),
             file_category='VA Forms'
         )
-
         session.add(new_file)
         session.flush()  # get file_id
         file_id = new_file.file_id
-        print(f"Inserted new file record with file_id={file_id}")
-        print("Stored url in Database")
-        # The session commit or rollback will happen in your global teardown_request
+
+        logger.info("New file record (file_id=%s) inserted.", file_id)
+        logger.debug("Returning success response to client.")
 
         return jsonify({
             "message": "Summary PDF generated and uploaded to Azure",
@@ -161,30 +191,34 @@ def generate_claim_summary():
         }), 200
 
     except Exception as e:
-        print("Error in generating summary:", e)
+        logger.exception("Exception occurred in generate_claim_summary:")
         return jsonify({"error": "Failed to process request"}), 500
 
 
 def wrap_text(page, text, x, y, max_width, max_height,
               font_size, line_spacing, font, pdf):
+    """Utility function for text wrapping across multiple PDF pages."""
+    logger = logging.getLogger(__name__)
+    logger.debug("Starting wrap_text utility.")
     cursor_y = y
     words = text.split(' ')
     line = ""
 
     current_page = page
     current_page_num = 0
-
-    first_page_y = y
     subsequent_page_y = 100
 
     for word in words:
         test_line = f"{line} {word}".strip()
-        line_length = font.text_length(test_line, fontsize=font_size)
+        if font:
+            line_length = font.text_length(test_line, fontsize=font_size)
+        else:
+            line_length = page.get_textlength(test_line, fontsize=font_size)
 
         if line_length <= max_width:
             line = test_line
         else:
-            if cursor_y + line_spacing > y + max_height:
+            if (cursor_y + line_spacing) > (y + max_height):
                 # Move to next page if needed
                 current_page_num += 1
                 if current_page_num < len(pdf):
@@ -192,33 +226,38 @@ def wrap_text(page, text, x, y, max_width, max_height,
                 else:
                     current_page = pdf.new_page()
                 cursor_y = subsequent_page_y
+                logger.debug("Creating new page #%d at y=%s.", current_page_num, cursor_y)
 
             current_page.insert_text(
                 (x, cursor_y),
                 line,
                 fontsize=font_size,
-                fontname="helv",
+                fontname="helv" if font else "Times-Roman",
                 color=(0, 0, 0)
             )
             cursor_y += line_spacing
             line = word
 
-    if line:
-        if cursor_y + line_spacing > y + max_height:
+    if line:  # Print the last line
+        if (cursor_y + line_spacing) > (y + max_height):
             current_page_num += 1
             if current_page_num < len(pdf):
                 current_page = pdf[current_page_num]
             else:
                 current_page = pdf.new_page()
             cursor_y = subsequent_page_y
+            logger.debug("Moving final line to new page #%d at y=%s.", current_page_num, cursor_y)
 
         current_page.insert_text(
             (x, cursor_y),
             line,
             fontsize=font_size,
-            fontname="helv",
+            fontname="helv" if font else "Times-Roman",
             color=(0, 0, 0)
         )
+    logger.debug("Completed wrap_text utility.")
+
+
 
 
 ###############################################################################

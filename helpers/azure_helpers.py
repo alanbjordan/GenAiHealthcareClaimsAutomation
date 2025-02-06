@@ -287,3 +287,20 @@ def download_blob_to_tempfile(blob_url, temp_file_path):
     except Exception as e:
         logging.error(f"Error writing blob to temp file '{temp_file_path}': {e}")
         return None
+    
+
+def download_blob_with_credentials(blob_name: str) -> bytes:
+    """
+    Downloads a blob from your storage container using your connection string
+    and returns the file content as bytes, or None if something fails.
+    """
+    try:
+        container_client = blob_service_client.get_container_client(container_name)
+        blob_client = container_client.get_blob_client(blob_name)
+        logging.info(f"Downloading blob '{blob_name}' from container '{container_name}'...")
+        blob_data = blob_client.download_blob().readall()
+        logging.info(f"Successfully downloaded {len(blob_data)} bytes from '{blob_name}'")
+        return blob_data
+    except Exception as e:
+        logging.error(f"Error downloading blob '{blob_name}': {e}")
+        return None
