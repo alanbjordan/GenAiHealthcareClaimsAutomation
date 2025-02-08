@@ -36,3 +36,5 @@ dist/
 *.egg-info/
 
 NER/
+
+docker_deploy.txt
