@@ -4,8 +4,8 @@ docker build -t vaclaimguard:latest .
 docker tag vaclaimguard:latest vaclaimguard.azurecr.io/vaclaimguard:latest
 docker push vaclaimguard.azurecr.io/vaclaimguard:latest 
 az webapp log tail --name vaclaimguard --resource-group VetDox
-
-
+celery -A celery_app.celery worker --loglevel=info
+sudo sysctl -w net.ipv6.conf.lo.disable_ipv6=1
 
 az login  
 az acr login --name vaclaimguard  
@@ -13,3 +13,595 @@ docker build -t my-celery-worker -f Dockerfile.worker .
 docker tag my-celery-worker vaclaimguard.azurecr.io/my-celery-worker:latest
 docker push vaclaimguard.azurecr.io/my-celery-worker:latest
 az container attach --resource-group VetDox --name my-celery-worker
+
+KUBERNETES CLUSTERS
+>> az group list -o table
+Name                                       Location    Status
+-----------------------------------------  ----------  ---------
+VetDox                                     centralus   Succeeded
+DefaultResourceGroup-EUS                   eastus      Succeeded
+DefaultResourceGroup-CUS                   centralus   Succeeded
+MC_VetDox_vaclaimguard-aks-cluster_eastus  eastus      Succeeded
+NetworkWatcherRG                           eastus      Succeeded
+
+
+>> az aks list -o table
+Name                      Location    ResourceGroup    KubernetesVersion    CurrentKubernetesVersion    ProvisioningState    Fqdn
+------------------------  ----------  ---------------  -------------------  --------------------------  -------------------  ------------------------------------------------------
+vaclaimguard-aks-cluster  eastus      VetDox           1.30                 1.30.7                      Succeeded            vaclaimgua-vetdox-fe94d5-4n1djpaf.hcp.eastus.azmk8s.io
+
+az aks show \
+  --resource-group VetDox \
+  --name vaclaimguard-aks-cluster \
+  -o json
+{
+  "aadProfile": null,
+  "addonProfiles": null,
+  "agentPoolProfiles": [
+    {
+      "availabilityZones": null,
+      "capacityReservationGroupId": null,
+      "count": 1,
+      "creationData": null,
+      "currentOrchestratorVersion": "1.30.7",
+      "eTag": null,
+      "enableAutoScaling": true,
+      "enableEncryptionAtHost": false,
+      "enableFips": false,
+      "enableNodePublicIp": false,
+      "enableUltraSsd": false,
+      "gpuInstanceProfile": null,
+      "hostGroupId": null,
+      "kubeletConfig": null,
+      "kubeletDiskType": "OS",
+      "linuxOsConfig": null,
+      "maxCount": 5,
+      "maxPods": 250,
+      "minCount": 1,
+      "mode": "System",
+      "name": "nodepool1",
+      "networkProfile": null,
+      "nodeImageVersion": "AKSUbuntu-2204gen2containerd-202501.28.0",
+      "nodeLabels": null,
+      "nodePublicIpPrefixId": null,
+      "nodeTaints": null,
+      "orchestratorVersion": "1.30",
+      "osDiskSizeGb": 128,
+      "osDiskType": "Ephemeral",
+      "osSku": "Ubuntu",
+      "osType": "Linux",
+      "podSubnetId": null,
+      "powerState": {
+        "code": "Running"
+      },
+      "provisioningState": "Succeeded",
+      "proximityPlacementGroupId": null,
+      "scaleDownMode": "Delete",
+      "scaleSetEvictionPolicy": null,
+      "scaleSetPriority": null,
+      "securityProfile": {
+        "enableSecureBoot": false,
+        "enableVtpm": false
+      },
+      "spotMaxPrice": null,
+      "tags": null,
+      "type": "VirtualMachineScaleSets",
+      "upgradeSettings": {
+        "drainTimeoutInMinutes": null,
+        "maxSurge": "10%",
+        "nodeSoakDurationInMinutes": null
+      },
+      "vmSize": "Standard_D8s_v3",
+      "windowsProfile": null,
+      "workloadRuntime": null
+    }
+  ],
+  "apiServerAccessProfile": null,
+  "autoScalerProfile": {
+    "balanceSimilarNodeGroups": "false",
+    "daemonsetEvictionForEmptyNodes": false,
+    "daemonsetEvictionForOccupiedNodes": true,
+    "expander": "random",
+    "ignoreDaemonsetsUtilization": false,
+    "maxEmptyBulkDelete": "10",
+    "maxGracefulTerminationSec": "600",
+    "maxNodeProvisionTime": "15m",
+    "maxTotalUnreadyPercentage": "45",
+    "newPodScaleUpDelay": "0s",
+    "okTotalUnreadyCount": "3",
+    "scaleDownDelayAfterAdd": "10m",
+    "scaleDownDelayAfterDelete": "10s",
+    "scaleDownDelayAfterFailure": "3m",
+    "scaleDownUnneededTime": "10m",
+    "scaleDownUnreadyTime": "20m",
+    "scaleDownUtilizationThreshold": "0.5",
+    "scanInterval": "10s",
+    "skipNodesWithLocalStorage": "false",
+    "skipNodesWithSystemPods": "true"
+  },
+  "autoUpgradeProfile": {
+    "nodeOsUpgradeChannel": "NodeImage",
+    "upgradeChannel": null
+  },
+  "azureMonitorProfile": null,
+  "azurePortalFqdn": "vaclaimgua-vetdox-fe94d5-4n1djpaf.portal.hcp.eastus.azmk8s.io",
+  "currentKubernetesVersion": "1.30.7",
+  "disableLocalAccounts": false,
+  "diskEncryptionSetId": null,
+  "dnsPrefix": "vaclaimgua-VetDox-fe94d5",
+  "eTag": null,
+  "enablePodSecurityPolicy": null,
+  "enableRbac": true,
+  "extendedLocation": null,
+  "fqdn": "vaclaimgua-vetdox-fe94d5-4n1djpaf.hcp.eastus.azmk8s.io",
+  "fqdnSubdomain": null,
+  "httpProxyConfig": null,
+  "id": "/subscriptions/fe94d5e9-a4ee-4d23-b853-fd22ec5b3763/resourcegroups/VetDox/providers/Microsoft.ContainerService/managedClusters/vaclaimguard-aks-cluster",
+  "identity": {
+    "delegatedResources": null,
+    "principalId": "04231f96-0724-4cf7-bc64-d8c99f125e65",
+    "tenantId": "94a0cf45-a3a8-4d9b-b8e1-32ec6b162231",
+    "type": "SystemAssigned",
+    "userAssignedIdentities": null
+  },
+  "identityProfile": {
+    "kubeletidentity": {
+      "clientId": "6e574371-199a-459d-accd-c22ebca0742f",
+      "objectId": "45f2182b-a980-4caf-94e6-d93754fdeb73",
+      "resourceId": "/subscriptions/fe94d5e9-a4ee-4d23-b853-fd22ec5b3763/resourcegroups/MC_VetDox_vaclaimguard-aks-cluster_eastus/providers/Microsoft.ManagedIdentity/userAssignedIdentities/vaclaimguard-aks-cluster-agentpool"
+    }
+  },
+  "ingressProfile": null,
+  "kubernetesVersion": "1.30",
+  "linuxProfile": {
+    "adminUsername": "azureuser",
+    "ssh": {
+      "publicKeys": [
+        {
+          "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCuwvGMWsU1zStnTDLaHtU3DLbzKAAMksVdMGwqbx9x9PQguvthmQ/HkiJMXMx90B8NjeYgDcXcCS/xxDBvFb+9VzMO1I6OKyb0LPJWOZzvNEclNLFVNUTCA3sMqk7G4Fa8RD3/JfLqnb03FYKcUHfNTERFAOH/qj4QDNfKVXqkP3t2jXGKAiUsYUmkj9z5e1SGZkolLzhcc/InaWOPmnTFt+Jqmwo6ym6ynIsUpgt8vYDcCs0cY+RPTVxFYRg35B7mtEhjHLHwMqI0HMvM1BDFJeBkbkSUaCzJC2QVkvC5DwB+WiNnr7aHEBBkfgYk6mTVkysUp9rmJLOJ7W301z4p"
+        }
+      ]
+    }
+  },
+  "location": "eastus",
+  "maxAgentPools": 100,
+  "metricsProfile": {
+    "costAnalysis": {
+      "enabled": false
+    }
+  },
+  "name": "vaclaimguard-aks-cluster",
+  "networkProfile": {
+    "advancedNetworking": null,
+    "dnsServiceIp": "10.0.0.10",
+    "ipFamilies": [
+      "IPv4"
+    ],
+    "loadBalancerProfile": {
+      "allocatedOutboundPorts": null,
+      "backendPoolType": "nodeIPConfiguration",
+      "effectiveOutboundIPs": [
+        {
+          "id": "/subscriptions/fe94d5e9-a4ee-4d23-b853-fd22ec5b3763/resourceGroups/MC_VetDox_vaclaimguard-aks-cluster_eastus/providers/Microsoft.Network/publicIPAddresses/d5e67a1c-03ea-4770-84ea-560f67048dc7",
+          "resourceGroup": "MC_VetDox_vaclaimguard-aks-cluster_eastus"
+        }
+      ],
+      "enableMultipleStandardLoadBalancers": null,
+      "idleTimeoutInMinutes": null,
+      "managedOutboundIPs": {
+        "count": 1,
+        "countIpv6": null
+      },
+      "outboundIPs": null,
+      "outboundIpPrefixes": null
+    },
+    "loadBalancerSku": "standard",
+    "natGatewayProfile": null,
+    "networkDataplane": "azure",
+    "networkMode": null,
+    "networkPlugin": "azure",
+    "networkPluginMode": "overlay",
+    "networkPolicy": "none",
+    "outboundType": "loadBalancer",
+    "podCidr": "10.244.0.0/16",
+    "podCidrs": [
+      "10.244.0.0/16"
+    ],
+    "serviceCidr": "10.0.0.0/16",
+    "serviceCidrs": [
+      "10.0.0.0/16"
+    ]
+  },
+  "nodeResourceGroup": "MC_VetDox_vaclaimguard-aks-cluster_eastus",
+  "nodeResourceGroupProfile": null,
+  "oidcIssuerProfile": {
+    "enabled": false,
+    "issuerUrl": null
+  },
+  "podIdentityProfile": null,
+  "powerState": {
+    "code": "Running"
+  },
+  "privateFqdn": null,
+  "privateLinkResources": null,
+  "provisioningState": "Succeeded",
+  "publicNetworkAccess": null,
+  "resourceGroup": "VetDox",
+  "resourceUid": "67a701b30b1fc40001f50484",
+  "securityProfile": {
+    "azureKeyVaultKms": null,
+    "defender": null,
+    "imageCleaner": null,
+    "workloadIdentity": null
+  },
+  "serviceMeshProfile": null,
+  "servicePrincipalProfile": {
+    "clientId": "msi"
+  },
+  "sku": {
+    "name": "Base",
+    "tier": "Free"
+  },
+  "storageProfile": {
+    "blobCsiDriver": null,
+    "diskCsiDriver": {
+      "enabled": true
+    },
+    "fileCsiDriver": {
+      "enabled": true
+    },
+    "snapshotController": {
+      "enabled": true
+    }
+  },
+  "supportPlan": "KubernetesOfficial",
+  "systemData": null,
+  "type": "Microsoft.ContainerService/ManagedClusters",
+  "upgradeSettings": null,
+  "windowsProfile": null,
+  "workloadAutoScalerProfile": {
+    "keda": null,
+    "verticalPodAutoscaler": null
+  }
+}
+
+
+>> kubectl get nodes -o wide
+NAME                                STATUS   ROLES    AGE    VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION      CONTAINER-RUNTIME
+aks-nodepool1-33785889-vmss000000   Ready    <none>   6h4m   v1.30.7   10.224.0.4    <none>        Ubuntu 22.04.5 LTS   5.15.0-1079-azure   containerd://1.7.25-1
+
+>> kubectl get deployments --all-namespaces
+NAMESPACE     NAME                 READY   UP-TO-DATE   AVAILABLE   AGE
+default       celery-worker        1/2     2            1           5h31m
+kube-system   coredns              2/2     2            2           6h7m
+kube-system   coredns-autoscaler   1/1     1            1           6h7m
+kube-system   konnectivity-agent   2/2     2            2           6h7m
+kube-system   metrics-server       2/2     2            2           6h7m
+
+az aks get-credentials \
+  --resource-group VetDox \
+  --name vaclaimguard-aks-cluster
+
+CELERY WORKERS
+>> kubectl get deployment celery-worker -n default
+NAME            READY   UP-TO-DATE   AVAILABLE   AGE
+celery-worker   1/2     2            1           5h32m
+
+>> kubectl get pods -n default --show-labels
+NAME                             READY   STATUS    RESTARTS   AGE     LABELS
+celery-worker-6c7c59c87b-7njhp   1/1     Running   0          3h23m   app=celery-worker,pod-template-hash=6c7c59c87b
+celery-worker-6c7c59c87b-l98hr   0/1     Pending   0          3h23m   app=celery-worker,pod-template-hash=6c7c59c87b
+
+>> kubectl get pods -l app=celery-worker  -n default
+NAME                             READY   STATUS    RESTARTS   AGE
+celery-worker-6c7c59c87b-7njhp   1/1     Running   0          3h24m
+celery-worker-6c7c59c87b-l98hr   0/1     Pending   0          3h24m
+
+>> kubectl describe deployment celery-worker -n default
+Name:                   celery-worker
+Namespace:              default
+CreationTimestamp:      Sat, 08 Feb 2025 14:41:12 +0700
+Labels:                 <none>
+Annotations:            deployment.kubernetes.io/revision: 4
+Selector:               app=celery-worker
+Replicas:               2 desired | 2 updated | 2 total | 1 available | 1 unavailable
+StrategyType:           RollingUpdate
+MinReadySeconds:        0
+RollingUpdateStrategy:  25% max unavailable, 25% max surge
+Pod Template:
+  Labels:  app=celery-worker
+  Containers:
+   celery:
+    Image:      vaclaimguard.azurecr.io/my-celery-worker:latest
+    Port:       <none>
+    Host Port:  <none>
+    Command:
+      celery
+      -A
+      celery_app.celery
+      worker
+      --loglevel=info
+    Limits:
+      cpu:     8
+      memory:  16Gi
+    Requests:
+      cpu:     4
+      memory:  8Gi
+    Environment Variables from:
+      celery-secrets  Secret  Optional: false
+    Environment:
+      TZ:          UTC
+    Mounts:        <none>
+  Volumes:         <none>
+  Node-Selectors:  <none>
+  Tolerations:     <none>
+Conditions:
+  Type           Status  Reason
+  ----           ------  ------
+  Progressing    True    NewReplicaSetAvailable
+  Available      False   MinimumReplicasUnavailable
+OldReplicaSets:  celery-worker-6d8fc56685 (0/0 replicas created), celery-worker-65b6559bc5 (0/0 replicas created), celery-worker-76bcc96c5d (0/0 replicas created)
+NewReplicaSet:   celery-worker-6c7c59c87b (2/2 replicas created)
+Events:          <none>
+
+
+>> kubectl describe pod celery-worker-6c7c59c87b-7njhp -n default
+Name:             celery-worker-6c7c59c87b-7njhp
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             aks-nodepool1-33785889-vmss000000/10.224.0.4
+Start Time:       Sat, 08 Feb 2025 16:57:11 +0700
+Labels:           app=celery-worker
+                  pod-template-hash=6c7c59c87b
+Annotations:      <none>
+Status:           Running
+IP:               10.244.0.207
+IPs:
+  IP:           10.244.0.207
+Controlled By:  ReplicaSet/celery-worker-6c7c59c87b
+Containers:
+  celery:
+    Container ID:  containerd://50091576225c16a6cdfe526de42b9abd2f3fcd5afc1a89f7bfb00d94048cda09
+    Image:         vaclaimguard.azurecr.io/my-celery-worker:latest
+    Image ID:      vaclaimguard.azurecr.io/my-celery-worker@sha256:7bdf58cec4ce37d971813b6349903aa01544fdaeb4659e265f84cd14b8d3e083
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      celery
+      -A
+      celery_app.celery
+      worker
+      --loglevel=info
+    State:          Running
+      Started:      Sat, 08 Feb 2025 16:57:13 +0700
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      cpu:     8
+      memory:  16Gi
+    Requests:
+      cpu:     4
+      memory:  8Gi
+    Environment Variables from:
+      celery-secrets  Secret  Optional: false
+    Environment:
+      TZ:  UTC
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-cdxnw (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-cdxnw:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    ConfigMapOptional:       <nil>
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/memory-pressure:NoSchedule op=Exists
+                             node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason                           Age                    From     Message
+  ----     ------                           ----                   ----     -------
+  Warning  FailedToRetrieveImagePullSecret  86s (x168 over 3h32m)  kubelet  Unable to retrieve some image pull secrets (acr-secret); attempting to pull the image may not succeed.
+
+
+az vm list-usage --location eastus -o table
+Name                                      CurrentValue    Limit
+----------------------------------------  --------------  -------
+Availability Sets                         0               2500
+Total Regional vCPUs                      8               10
+Virtual Machines                          1               25000
+Virtual Machine Scale Sets                1               2500
+Dedicated vCPUs                           0               3000
+Cloud Services                            0               2500
+Total Regional Low-priority vCPUs         0               3
+Standard DSv3 Family vCPUs                8               10
+Basic A Family vCPUs                      0               10
+Standard A0-A7 Family vCPUs               0               10
+Standard A8-A11 Family vCPUs              0               10
+Standard D Family vCPUs                   0               10
+Standard Dv2 Family vCPUs                 0               10
+Standard DS Family vCPUs                  0               10
+Standard DSv2 Family vCPUs                0               10
+Standard G Family vCPUs                   0               10
+Standard GS Family vCPUs                  0               10
+Standard F Family vCPUs                   0               10
+Standard FS Family vCPUs                  0               10
+Standard NV Family vCPUs                  0               12
+Standard NC Family vCPUs                  0               12
+Standard H Family vCPUs                   0               8
+Standard Av2 Family vCPUs                 0               10
+Standard LS Family vCPUs                  0               10
+Standard Dv2 Promo Family vCPUs           0               10
+Standard DSv2 Promo Family vCPUs          0               10
+Standard MS Family vCPUs                  0               0
+Standard Dv3 Family vCPUs                 0               10
+Standard Ev3 Family vCPUs                 0               10
+Standard ESv3 Family vCPUs                0               10
+Standard Dv4 Family vCPUs                 0               10
+Standard DDv4 Family vCPUs                0               10
+Standard DSv4 Family vCPUs                0               10
+Standard DDSv4 Family vCPUs               0               10
+Standard Ev4 Family vCPUs                 0               10
+Standard EDv4 Family vCPUs                0               0
+Standard ESv4 Family vCPUs                0               0
+Standard EDSv4 Family vCPUs               0               10
+Standard BS Family vCPUs                  0               10
+Standard FSv2 Family vCPUs                0               10
+Standard NDS Family vCPUs                 0               0
+Standard NCSv2 Family vCPUs               0               0
+Standard NCSv3 Family vCPUs               0               0
+Standard LSv2 Family vCPUs                0               10
+Standard PBS Family vCPUs                 0               6
+Standard EIv3 Family vCPUs                0               10
+Standard EISv3 Family vCPUs               0               10
+Standard DCS Family vCPUs                 0               8
+Standard NVSv2 Family vCPUs               0               0
+Standard MSv2 Family vCPUs                0               0
+Standard HBS Family vCPUs                 0               0
+Standard HCS Family vCPUs                 0               0
+Standard NVSv3 Family vCPUs               0               0
+Standard NV Promo Family vCPUs            0               12
+Standard NC Promo Family vCPUs            0               12
+Standard H Promo Family vCPUs             0               8
+Standard DAv4 Family vCPUs                0               0
+Standard DASv4 Family vCPUs               0               10
+Standard EAv4 Family vCPUs                0               0
+Standard EASv4 Family vCPUs               0               10
+Standard NDSv3 Family vCPUs               0               0
+Standard DCSv2 Family vCPUs               0               8
+Standard NVSv4 Family vCPUs               0               8
+Standard NDSv2 Family vCPUs               0               0
+Standard NPS Family vCPUs                 0               0
+Standard HBrsv2 Family vCPUs              0               0
+Standard NCASv3_T4 Family vCPUs           0               0
+Standard NDASv4_A100 Family vCPUs         0               0
+Standard EIDSv4 Family vCPUs              0               0
+Standard XEISv4 Family vCPUs              0               0
+Standard EIASv4 Family vCPUs              0               0
+Standard HBv3 Family vCPUs                0               0
+Standard MDSMediumMemoryv2 Family vCPUs   0               0
+Standard MIDSMediumMemoryv2 Family vCPUs  0               0
+Standard MSMediumMemoryv2 Family vCPUs    0               0
+Standard MISMediumMemoryv2 Family vCPUs   0               0
+Standard DASv5 Family vCPUs               0               0
+Standard EASv5 Family vCPUs               0               0
+Standard Ev5 Family vCPUs                 0               0
+Standard EIv5 Family vCPUs                0               0
+Standard EDv5 Family vCPUs                0               0
+Standard EIDv5 Family vCPUs               0               0
+Standard ESv5 Family vCPUs                0               0
+Standard EISv5 Family vCPUs               0               0
+Standard EDSv5 Family vCPUs               0               0
+Standard EIDSv5 Family vCPUs              0               0
+Standard Dv5 Family vCPUs                 0               0
+Standard DDv5 Family vCPUs                0               0
+Standard DSv5 Family vCPUs                0               0
+Standard DDSv5 Family vCPUs               0               0
+Standard DLSv5 Family vCPUs               0               0
+Standard DLDSv5 Family vCPUs              0               0
+Standard LSv3 Family vCPUs                0               0
+Standard LASv3 Family vCPUs               0               0
+Standard DCSv3 Family vCPUs               0               0
+Standard DDCSv3 Family vCPUs              0               0
+Standard DADSv5 Family vCPUs              0               0
+Standard EADSv5 Family vCPUs              0               0
+Standard FXMDVS Family vCPUs              0               0
+Standard DPLDSv5 Family vCPUs             0               0
+Standard DPLSv5 Family vCPUs              0               0
+Standard DPDSv5 Family vCPUs              0               0
+Standard DPSv5 Family vCPUs               0               0
+Standard EPDSv5 Family vCPUs              0               0
+Standard EPSv5 Family vCPUs               0               0
+Standard NDAMSv4_A100Family vCPUs         0               0
+Standard DCASv5 Family vCPUs              0               0
+Standard ECASv5 Family vCPUs              0               0
+Standard ECIASv5 Family vCPUs             0               0
+Standard DCADSv5 Family vCPUs             0               0
+Standard ECADSv5 Family vCPUs             0               0
+Standard ECIADSv5 Family vCPUs            0               0
+Standard NVADSA10v5 Family vCPUs          0               0
+Standard NCADS_A100_v4 Family vCPUs       0               0
+Standard EBDSv5 Family vCPUs              0               10
+Standard EBSv5 Family vCPUs               0               10
+Standard EIASv5 Family vCPUs              0               0
+Standard EIADSv5 Family vCPUs             0               0
+Standard NCADSA10v4 Family vCPUs          0               0
+standard DCACCV5 Family vCPUs             0               0
+standard DCADCCV5 Family vCPUs            0               0
+standard ECACCV5 Family vCPUs             0               0
+standard ECADCCV5 Family vCPUs            0               0
+Standard EIBDSv5 Family vCPUs             0               0
+Standard EIBSv5 Family vCPUs              0               0
+Standard DCEV5 Family vCPUs               0               0
+Standard DCEDV5 Family vCPUs              0               0
+Standard ECEV5 Family vCPUs               0               0
+Standard ECEDV5 Family vCPUs              0               0
+StandardMS Medium Memoryv3 Family vCPUs   0               0
+StandardMDS Medium Memoryv3 Family vCPUs  0               0
+StandardMS High Memoryv3 Family vCPUs     0               0
+StandardMIS High Memoryv3 Family vCPUs    0               0
+StandardMDS High Memoryv3 Family vCPUs    0               0
+StandardMIDS High Memoryv3 Family vCPUs   0               0
+Standard HBv4 Family vCPUs                0               0
+Standard HX Family vCPUs                  0               0
+Standard Bpsv2 Family vCPUs               0               0
+Standard Bsv2 Family vCPUs                0               0
+Standard Basv2 Family vCPUs               0               0
+standard Dadv6 Family vCPUs               0               10
+standard Daldv6 Family vCPUs              0               10
+standard Dalv6 Family vCPUs               0               10
+standard Dav6 Family vCPUs                0               10
+standard Eadv6 Family vCPUs               0               10
+standard Eav6 Family vCPUs                0               10
+Standard NDSH100v5 Family vCPUs           0               0
+Standard ECIEV5 Family vCPUs              0               0
+Standard ECIEDV5 Family vCPUs             0               0
+Standard NCadsH100v5 Family vCPUs         0               0
+InternalNDM Sv 1 Family vCPUs             0               10
+StandardNDI Sv 5MI300X Family vCPUs       0               0
+Standard Dpsv6 Family vCPUs               0               10
+Standard Dpdsv6 Family vCPUs              0               10
+Standard Dplsv6 Family vCPUs              0               10
+Standard Dpldsv6 Family vCPUs             0               10
+Standard Epsv6 Family vCPUs               0               10
+Standard Epdsv6 Family vCPUs              0               10
+Standard Falsv6 Family vCPUs              0               10
+Standard Fasv6 Family vCPUs               0               10
+Standard Famsv6 Family vCPUs              0               10
+Standard MBDSMediumMemoryv3 Family vCPUs  0               10
+Standard MBSMediumMemoryv3 Family vCPUs   0               10
+StandardNDISRH200V5Family vCPUs           0               0
+Standard NVadsV710v5 Family vCPUs         0               0
+Standard Storage Managed Disks            1               50000
+Premium Storage Managed Disks             0               50000
+StandardSSDStorageDisks                   0               50000
+StandardSSDZRSStorageDisks                0               50000
+PremiumZRSStorageDisks                    0               50000
+UltraSSDStorageDisks                      0               1000
+PremiumV2StorageDisks                     0               1000
+StandardStorageSnapshots                  0               75000
+StandardSSDStorageSnapshots               0               75000
+PremiumStorageSnapshots                   0               75000
+ZrsStorageSnapshots                       0               75000
+UltraSSDTotalSizeInGB                     0               102400
+PremiumV2TotalDiskSizeInGB                0               102400
+DiskEncryptionSets                        0               5000
+DiskAccesses                              0               1000
+AttachInProgressUltraSSDDisks             0               40
+AttachInProgressPremiumV2SSDDisks         0               40
+PremiumV2StorageSnapshots                 0               1000
+PremiumV2TotalSnapshotSizeInGB            0               102400
+Gallery                                   0               100
+Gallery Image                             0               1000
+Gallery Image Version                     0               10000
+Gallery Application Version               0               300

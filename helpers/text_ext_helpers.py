@@ -10,7 +10,7 @@ from PIL import Image
 from psycopg2 import sql
 from openai import OpenAI
 from urllib.parse import urlparse
-from pdf2image import convert_from_bytes
+from pdf2image import convert_from_bytes, pdfinfo_from_bytes
 from helpers.llm_helpers import *
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict
@@ -110,7 +110,7 @@ def process_pages(user_id, page_contents: List[str]) -> List[Dict]:
         }
 
         results = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(
                     process_single_page, user_id, page_num, content, classification
@@ -295,52 +295,66 @@ def process_image_bytes(image_bytes: bytes) -> str:
         logger.error(f"Error processing image: {e}")
         raise
 
-def process_pdf_bytes(pdf_bytes: bytes) -> List[str]:
+def process_pdf_bytes(pdf_bytes: bytes, batch_size: int = 3) -> List[str]:
     """
-    Convert PDF bytes to text by performing OCR on each page using multithreading.
-
+    Convert PDF bytes to text by performing OCR on each page in batches.
+    
     Args:
         pdf_bytes (bytes): The PDF file content in bytes.
-
+        batch_size (int): Number of pages to process at a time.
+    
     Returns:
         List[str]: A list containing the extracted text for each page.
     """
     try:
-        logger.info("Converting PDF bytes to images.")
-        print("Converting PDF bytes to images.")
-        images = convert_from_bytes(pdf_bytes)
-        logger.info(f"Converted PDF to {len(images)} images.")
-        print(f"Converted PDF to {len(images)} images.")
+        logger.info("Obtaining PDF info to determine total pages.")
+        info = pdfinfo_from_bytes(pdf_bytes)
+        total_pages = info.get("Pages", 0)
+        logger.info(f"Total pages in PDF: {total_pages}")
+        print(f"Total pages in PDF: {total_pages}")
     except Exception as e:
-        logger.error(f"Error converting PDF to images: {e}")
-        raise RuntimeError("Failed to convert PDF to images.") from e
+        logger.error(f"Error obtaining PDF info: {e}")
+        raise RuntimeError("Failed to obtain PDF info.") from e
 
-    text_content = []
-    page_num_image_tuples = list(enumerate(images, start=1))
-    max_workers = min(32, len(images))  # Adjust based on your environment
+    all_text_content = []
 
-    logger.info(f"Starting OCR with {max_workers} threads.")
-    print(f"Starting OCR with {max_workers} threads.")
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all OCR tasks to the thread pool
-        future_to_page = {executor.submit(ocr_image, pair): pair[0] for pair in page_num_image_tuples}
+    # Process the PDF in batches of 'batch_size' pages. forcing the batch size to be 3
+    for start_page in range(1, total_pages + 1, batch_size):
+        end_page = min(start_page + batch_size - 1, total_pages)
+        try:
+            logger.info(f"Converting pages {start_page} to {end_page} to images.")
+            print(f"Converting pages {start_page} to {end_page} to images.")
+            batch_images = convert_from_bytes(
+                pdf_bytes,
+                first_page=start_page,
+                last_page=end_page
+            )
+        except Exception as e:
+            logger.error(f"Error converting pages {start_page}-{end_page}: {e}")
+            raise RuntimeError(f"Failed to convert pages {start_page}-{end_page} to images.") from e
 
-        # As each task completes, gather the result
-        for future in as_completed(future_to_page):
-            page_num = future_to_page[future]
-            try:
-                page_text = future.result()
-                text_content.append(page_text)
-                logger.info(f"OCR completed for page {page_num}.")
-            except Exception as e:
-                logger.error(f"OCR failed for page {page_num}: {e}")
-                # Depending on requirements, you can choose to continue or abort
-                # Here, we'll continue processing other pages
-                text_content.append(f"\n\nPage {page_num}:\n[Error processing page]")
+        batch_text_content = []
+        # Create tuples of (page_number, image) for the current batch.
+        page_num_image_tuples = list(enumerate(batch_images, start=start_page))
+        max_workers = min(len(batch_images), 3)  # up to 10 threads for this batch
+        logger.info(f"Starting OCR for pages {start_page} to {end_page} using {max_workers} threads.")
+        print(f"Starting OCR for pages {start_page} to {end_page} using {max_workers} threads.")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_page = {executor.submit(ocr_image, pair): pair[0] for pair in page_num_image_tuples}
+            for future in as_completed(future_to_page):
+                page_num = future_to_page[future]
+                try:
+                    page_text = future.result()
+                    batch_text_content.append(page_text)
+                    logger.info(f"OCR completed for page {page_num}.")
+                except Exception as e:
+                    logger.error(f"OCR failed for page {page_num}: {e}")
+                    batch_text_content.append(f"\n\nPage {page_num}:\n[Error processing page]")
+        # Add the batch results to the overall results.
+        all_text_content.extend(batch_text_content)
 
-    # Optionally, sort the results by page number to maintain order
-    text_content_sorted = sorted(text_content, key=extract_page_num)
-
+    # Optionally, sort the results by page number (if order is important).
+    text_content_sorted = sorted(all_text_content, key=extract_page_num)
     logger.info("Completed OCR for all pages.")
     print("Completed OCR for all pages.")
     return text_content_sorted
