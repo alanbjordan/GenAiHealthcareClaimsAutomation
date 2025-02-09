@@ -11,7 +11,7 @@ from datetime import datetime
 from openai import OpenAI
 import os
 
-# Initialize the OpenAI client
+# Initialize the OpenAI client & forced update.
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -56,6 +56,8 @@ def chat():
         if not user:
             print(f"Invalid user UUID: {user_uuid}")
             return jsonify({"error": "Invalid user UUID"}), 404
+        
+        user_id = user.user_id
 
         if user.credits_remaining <= 0:
             return jsonify({
@@ -127,7 +129,7 @@ def chat():
         g.session.commit()
 
         # Refresh the user’s credits or other data if needed
-        updated_user = g.session.query(Users).filter_by(user_id=user.user_id).first()
+        updated_user = g.session.query(Users).filter_by(user_id=user_id).first()
         if not updated_user:
             return jsonify({"error": "User record not found after chat."}), 404
 
