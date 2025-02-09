@@ -13,6 +13,19 @@ docker build -t my-celery-worker -f Dockerfile.worker .
 docker tag my-celery-worker vaclaimguard.azurecr.io/my-celery-worker:latest
 docker push vaclaimguard.azurecr.io/my-celery-worker:latest
 az container attach --resource-group VetDox --name my-celery-worker
+# kubernetes refresh
+kubectl apply -f celery-worker-hpa.yaml
+kubectl apply -f celery-deployment.yaml
+kubectl get pods -l app=celery-worker  -n default
+kubectl rollout restart deployment celery-worker -n default
+kubectl scale deployment celery-worker --replicas=0 -n default
+kubectl scale deployment celery-worker --replicas=2 -n default
+
+# See logs of worker
+kubectl get pods -l app=celery-worker  -n default
+kubectl logs -f celery-worker-c4f449cd5-r5chm -n default
+
+
 
 KUBERNETES CLUSTERS
 >> az group list -o table
