@@ -113,7 +113,7 @@ def chat():
         # 6) Call continue_conversation to get the assistant’s reply
         result = continue_conversation(
             user_id=user.user_id,
-            user_input=user_message,
+            user_input=f'{user_message}, Here is my user_id: {user.user_id}',
             thread_id=thread_id,
             system_msg=system_message
         )

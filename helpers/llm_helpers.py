@@ -274,7 +274,7 @@ def generate_claim_response(user_id: int, text_content: str) -> str:
             user_id=user_id,
             model="gpt-4o",
             messages=messages,
-            max_tokens=750
+            max_tokens=2000
         )
 
         # 2) Extract and return the final statement
