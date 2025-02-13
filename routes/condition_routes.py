@@ -207,3 +207,87 @@ def feed_updates():
 
     print(f"Total time for /feed_updates request: {time.time() - start_time:.4f} seconds.")
     return jsonify(response_data), 200
+
+
+@condition_bp.route("/limited_feed_updates", methods=["GET"])
+def limited_feed_updates():
+    start_time = time.time()
+    print("Received GET /limited_feed_updates request.")
+
+    # Extract the user UUID from query parameters
+    user_uuid = request.args.get('userUUID')
+    if not user_uuid:
+        print("Missing userUUID in request.")
+        return jsonify({"error": "Missing userUUID in request."}), 400
+
+    # Get the limit parameter, defaulting to 3 if not provided
+    try:
+        limit = int(request.args.get('limit', 3))
+    except ValueError:
+        print("Invalid limit parameter.")
+        return jsonify({"error": "Invalid limit parameter."}), 400
+
+    # Retrieve the user from the Users table
+    try:
+        user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
+        if not user:
+            print(f"No user found with user_uuid: {user_uuid}")
+            return jsonify({"error": "Invalid user UUID"}), 404
+        user_id = user.user_id
+    except Exception as e:
+        print(f"Database query failed for Users: {e}")
+        return jsonify({"error": "Failed to retrieve user information."}), 500
+
+    # Query active nexus tags for the user, limited by the provided parameter
+    try:
+        active_nexus_tags = (
+            g.session.query(NexusTags)
+            .filter(NexusTags.revoked_at.is_(None))
+            .filter(NexusTags.user_id == user_id)
+            .order_by(NexusTags.discovered_at.desc())
+            .limit(limit)
+            .all()
+        )
+    except Exception as e:
+        print(f"Database query failed for NexusTags: {e}")
+        return jsonify({"error": "Failed to retrieve nexus tags."}), 500
+
+    response_data = []
+
+    for nexus in active_nexus_tags:
+        t = nexus.tag  # Assuming a relationship is defined on the NexusTags model
+
+        try:
+            conditions = (
+                g.session.query(Conditions)
+                .join(condition_tags, condition_tags.c.condition_id == Conditions.condition_id)
+                .filter(condition_tags.c.tag_id == t.tag_id)
+                .all()
+            )
+        except Exception as e:
+            print(f"Database query failed for Conditions: {e}")
+            return jsonify({"error": "Failed to retrieve associated conditions."}), 500
+
+        condition_list = []
+        for c in conditions:
+            condition_list.append({
+                "condition_id": c.condition_id,
+                "condition_name": c.condition_name,
+                "date_of_visit": c.date_of_visit.isoformat() if c.date_of_visit else None,
+                "medical_professionals": c.medical_professionals,
+                "treatments": c.treatments,
+                "findings": c.findings,
+                "comments": c.comments,
+                "in_service": c.in_service,
+            })
+
+        response_data.append({
+            "nexus_tags_id": nexus.nexus_tags_id,
+            "tag_id": t.tag_id,
+            "disability_name": t.disability_name,
+            "discovered_at": nexus.discovered_at.isoformat() if nexus.discovered_at else None,
+            "conditions": condition_list,
+        })
+
+    print(f"Total time for /limited_feed_updates request: {time.time() - start_time:.4f} seconds.")
+    return jsonify(response_data), 200
