@@ -13,9 +13,7 @@ from helpers.visit_processor import process_visit
 
 # Example: Using a Redis broker with SSL.
 CELERY_BROKER_URL = os.getenv(
-    'CELERY_BROKER_URL',
-    'rediss://:e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=@vaclaimguard.redis.cache.windows.net:6380/0'
-)
+    'CELERY_BROKER_URL')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
 celery = Celery('vaclaimguard', broker=CELERY_BROKER_URL, backend=CELERY_RESULT_BACKEND)
