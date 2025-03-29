@@ -84,7 +84,7 @@ def handle_support_modal():
             )
         }
         try:
-            resp = requests.post("https://hooks.slack.com/services/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", json=slack_payload)
+            resp = requests.post(SLACK_WEBHOOK_URL, json=slack_payload)
             resp.raise_for_status()
         except requests.exceptions.RequestException as e:
             print(f"Slack post failed: {e}")
