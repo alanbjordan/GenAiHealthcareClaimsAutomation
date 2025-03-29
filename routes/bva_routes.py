@@ -2,7 +2,7 @@
 
 import math
 from datetime import datetime
-
+import os
 import requests
 import chardet
 from bs4 import BeautifulSoup
@@ -32,9 +32,9 @@ def bva_search():
     page = request.args.get('page', default=1, type=int)
     if page < 1:
         page = 1
-
+    page_to_fetch = os.getenv("PAGE_TO_FETCH")
     t = log_with_timing(t, f"[bva_search][GET] Received query={query}, page={page}")
-    results, total_results, t = fetch_page("https://search.usa.gov/search/docs", query, page, t)
+    results, total_results, t = fetch_page(page_to_fetch, query, page, t)
 
     if total_results is not None:
         total_pages = math.ceil(total_results / 20.0)
