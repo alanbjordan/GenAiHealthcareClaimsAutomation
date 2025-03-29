@@ -38,7 +38,3 @@ spec:
         command: ["celery", "-A", "celery_app.celery", "worker", "--loglevel=info", "--concurrency=4"]
       imagePullSecrets:
       - name: acr-secret
-
-# Note: This deployment is designed to run on your AKS cluster in the "VetDox" resource group.
-# Your cluster uses Standard_D8s_v3 nodes (8 vCPUs) with autoscaling enabled.
-# Consider creating an HPA (Horizontal Pod Autoscaler) to scale replicas based on CPU usage or queue depth.
