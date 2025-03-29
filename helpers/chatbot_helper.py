@@ -19,6 +19,7 @@ from models.sql_models import Conditions, ConditionEmbedding, NexusTags, Tag
 # 1. ENV & GLOBAL SETUP
 ###############################################################################
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ASSISTANT_ID = os.getenv("ASSISTANT_ID")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_ENV = "us-east-1"  # or whichever region you use
 
@@ -33,7 +34,7 @@ EMBEDDING_MODEL_LARGE = "text-embedding-3-large"
 
 # Initialize the OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
-assistant_id = "asst_DPtDOmgeV83hOa0MWupf0qgw"
+assistant_id = ASSISTANT_ID
 
 # Initialize Pinecone
 pc = Pinecone(api_key=PINECONE_API_KEY)
