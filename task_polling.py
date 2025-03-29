@@ -1,11 +1,12 @@
 from celery.result import AsyncResult
 from celery import Celery
 import ssl
+import os
 
 # Replace these with your actual Redis details
 app = Celery('vaclaimguard', 
-             broker='rediss://:e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=@vaclaimguard.redis.cache.windows.net:6380/0', 
-             backend='rediss://:e9QG8zns7nfaWIqwhG3jbvlBEJnmvnDcjAzCaKxrbp8=@vaclaimguard.redis.cache.windows.net:6380/0')  # Ensure backend is also Redis
+             broker=os.getenv("BROKER"), 
+             backend=os.getenv("BACKEND")  # Ensure backend is also Redis
 
 app.conf.update(
     broker_use_ssl={
@@ -17,7 +18,7 @@ app.conf.update(
 )
 
 # Assuming you have the task ID from the response or elsewhere
-task_id = '069b0c7f-b0f3-4da6-98de-51539e63fa54'
+task_id = os.getenv(TASK_ID)
 
 # Check the task result from the Celery backend (Redis)
 result = AsyncResult(task_id)
