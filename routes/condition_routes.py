@@ -6,7 +6,6 @@ from helpers.azure_helpers import generate_sas_url, extract_blob_name
 import logging
 import time
 from sqlalchemy.orm import defer
-# from database.session import ScopedSession  # REMOVED: We'll use g.session now
 
 condition_bp = Blueprint('condition_bp', __name__)
 
