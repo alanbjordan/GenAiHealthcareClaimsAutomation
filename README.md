@@ -1,3 +1,5 @@
+## GENERATIVE AI WAS USED IN THE CREATION OF THIS APPLICATION. 
+
 # Medical Record Analysis
 
 ## Project Overview
