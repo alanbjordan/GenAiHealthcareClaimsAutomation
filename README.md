@@ -1,6 +1,6 @@
 # VA Claim Automation Backend
 
-A robust backend system built with Flask and Celery for automating Veterans Affairs (VA) claims processing. This project integrates document analysis, language model processing, file storage via Azure Blob Storage, and a chatbot interface using OpenAI's APIs. It also features a comprehensive database layer with SQLAlchemy and PostgreSQL, and is containerized using Docker.
+A robust backend system built with Flask and Celery for automating Veterans Affairs (VA) claims processing. This project integrates document analysis, language model processing, vector storage and search, and an agentic chatbot interface using OpenAI's APIs. It also features a comprehensive database layer with SQLAlchemy and PostgreSQL, and is containerized using Docker.
 
 ## Overview
 
