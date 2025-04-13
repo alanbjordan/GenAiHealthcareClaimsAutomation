@@ -298,7 +298,7 @@ def refresh():
     # 4) Ensure user still exists
     user = g.session.query(Users).filter_by(user_uuid=user_uuid).first()
     if not user:
-        # Also consider deleting or revoking the token
+        # consider deleting or revoking the token
         g.session.delete(db_refresh)
         g.session.commit()
         return jsonify({"error": "User not found"}), 404
