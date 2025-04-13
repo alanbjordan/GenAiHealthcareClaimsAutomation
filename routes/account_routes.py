@@ -96,7 +96,7 @@ def update_password():
         logging.warning(f"User {user.email} provided invalid current password")
         return jsonify({"error": "Current password is incorrect"}), 401
 
-    # Update to new password (assuming set_password does hashing)
+    # Update to new password 
     user.set_password(new_password)
     user.updated_at = datetime.utcnow()
 
