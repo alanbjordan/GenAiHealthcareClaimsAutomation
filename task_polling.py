@@ -3,7 +3,7 @@ from celery import Celery
 import ssl
 import os
 
-# Replace these with your actual Redis details
+# Redis details
 app = Celery('vaclaimguard', 
              broker=os.getenv("BROKER"), 
              backend=os.getenv("BACKEND")  # Ensure backend is also Redis
@@ -17,7 +17,7 @@ app.conf.update(
     }
 )
 
-# Assuming you have the task ID from the response or elsewhere
+# task ID 
 task_id = os.getenv(TASK_ID)
 
 # Check the task result from the Celery backend (Redis)
