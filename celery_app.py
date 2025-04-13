@@ -11,7 +11,7 @@ from helpers.azure_helpers import download_blob_to_tempfile
 from helpers.sql_helpers import discover_nexus_tags, revoke_nexus_tags_if_invalid, File
 from helpers.visit_processor import process_visit
 
-# Example: Using a Redis broker with SSL.
+# Using a Redis broker with SSL.
 CELERY_BROKER_URL = os.getenv(
     'CELERY_BROKER_URL')
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
@@ -124,7 +124,6 @@ def process_pages_task(self, details, user_id, user_uuid, file_info):
 
     except Exception as exc:
         logging.exception(f"Processing pages failed: {exc}")
-        # Optionally, add retry logic here.
 
 @celery.task(bind=True, max_retries=3, default_retry_delay=10)
 def finalize_task(self, processed_results, user_id, file_id):
