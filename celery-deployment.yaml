@@ -30,9 +30,9 @@ spec:
         env:
           - name: TZ
             value: "UTC"
-          - name: OMP_NUM_THREADS   # Ensure Tesseract uses only one thread per process.
+          - name: OMP_NUM_THREADS   
             value: "1"
-          - name: CELERYD_PREFETCH_MULTIPLIER  # (Optional) Ensure each worker prefetches one task at a time.
+          - name: CELERYD_PREFETCH_MULTIPLIER  
             value: "1"
         # Explicitly set concurrency to 4, which matches the CPU request on this pod.
         command: ["celery", "-A", "celery_app.celery", "worker", "--loglevel=info", "--concurrency=4"]
