@@ -1,4 +1,4 @@
-# main.py (or wherever you have your Flask entry point)
+# main.py
 
 from flask import g
 from create_app import create_app
@@ -6,7 +6,7 @@ from database.session import ScopedSession
 from datetime import datetime
 import os
 
-# --- Import all your Blueprints ---
+# --- Import all Blueprints ---
 from routes.auth_routes import auth_bp
 from routes.documents_routes import document_bp
 from routes.analysis_routes import analysis_bp
