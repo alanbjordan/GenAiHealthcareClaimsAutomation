@@ -20,22 +20,8 @@ logging.info("AZURE_CONNECTION_STRING:", os.getenv("AZURE_CONNECTION_STRING"))
 
 # Initialize BlobServiceClient using the connection string
 blob_service_client = BlobServiceClient.from_connection_string(os.getenv("AZURE_CONNECTION_STRING"))
-# ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
 
-# helpers/azure_helpers.py
+# ============  TESTING  ============
 
 def download_file_from_azure(blob_url):
     try:
@@ -54,7 +40,6 @@ def download_file_from_azure(blob_url):
 
 def extract_blob_name(blob_url):
     """Extracts the blob name from the Azure Blob Storage URL."""
-    # Assuming blob_url format: "https://<account_name>.blob.core.windows.net/<container_name>/<blob_name>"
     parts = blob_url.split('/')
     container_name = os.getenv("AZURE_CONTAINER_NAME")
     container_index = parts.index(container_name)
@@ -62,21 +47,8 @@ def extract_blob_name(blob_url):
     return blob_name
 
 # ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# ============  TESTING  ============
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
-# =============================================
 
-# Upload a file to Azure Blob Storage
+# Upload file to Azure Blob Storage
 def upload_file_to_azure(file_path, blob_name):
     try:
         container_name = os.getenv("AZURE_CONTAINER_NAME")
@@ -272,7 +244,7 @@ def download_blob_to_tempfile(blob_url, temp_file_path):
     :return: The local temp_file_path for convenience, or None if there was an error.
     """
     try:
-        # Re-use your existing function to get the file contents from Azure
+        
         file_content = download_file_from_azure(blob_url)
         if not file_content:
             logging.error(f"Empty content returned for blob: {blob_url}")
